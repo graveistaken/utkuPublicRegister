@@ -1,0 +1,1019 @@
+<title>Anime Karakter Atölyesi</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700&family=Figtree:ital,wght@0,400;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: sol tarafta yapışkan "Blender viewport" oynatıcısı, sağda uzun bölüm metinleri; telefonda alt alta. */
+:root{
+  --bg:#f2f0f6; --surface:#ffffff; --surface2:#e9e6f0; --fg:#1c1a23; --muted:#5d586b; --line:#d8d3e2;
+  --accent:#d96a06; --accent-ink:#ffffff; --pink:#c8325f; --blue:#3866c4; --tipbg:#fff3e6; --warnbg:#fde9ef;
+  --f-display:"Unbounded", "Arial Black", system-ui, sans-serif;
+  --f-body:"Figtree", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --f-mono:"JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#16151b; --surface:#201e27; --surface2:#2a2733; --fg:#ece9f3; --muted:#a59fb3; --line:#35313f;
+  --accent:#f2913a; --accent-ink:#1b1206; --pink:#f0729a; --blue:#7fa4f0; --tipbg:#2d2216; --warnbg:#2f1a22; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#16151b; --surface:#201e27; --surface2:#2a2733; --fg:#ece9f3; --muted:#a59fb3; --line:#35313f;
+  --accent:#f2913a; --accent-ink:#1b1206; --pink:#f0729a; --blue:#7fa4f0; --tipbg:#2d2216; --warnbg:#2f1a22; color-scheme:dark}
+
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font-family:var(--f-body);font-size:16px;line-height:1.65}
+.wrap{max-width:1260px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+a{color:var(--blue)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+/* ---------- Üst bölüm ---------- */
+.top{padding-block:40px 28px;display:grid;gap:18px}
+.eyebrow{font-family:var(--f-mono);font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--accent);margin:0}
+h1{font-family:var(--f-display);font-weight:700;font-size:clamp(28px,5vw,52px);line-height:1.08;margin:0;text-wrap:balance;letter-spacing:-.01em}
+h1 .k{color:var(--pink)}
+.lede{max-width:70ch;margin:0;color:var(--muted);font-size:17px}
+.meta{display:flex;flex-wrap:wrap;gap:8px 18px;font-family:var(--f-mono);font-size:13px;color:var(--muted)}
+.meta b{color:var(--fg);font-weight:600}
+
+/* ---------- Ana ızgara ---------- */
+.main{display:grid;grid-template-columns:minmax(0,1fr);gap:36px;padding-block:8px 64px}
+@media (min-width:1000px){
+  .main{grid-template-columns:430px minmax(0,1fr);gap:48px}
+  .player{position:sticky;top:calc(env(safe-area-inset-top,0px) + 14px);align-self:start;max-height:calc(100vh - 28px);overflow:auto;scrollbar-width:thin}
+}
+
+/* ---------- Oynatıcı (Blender viewport görünümü, her temada koyu) ---------- */
+.player{display:grid;gap:12px;min-width:0}
+.vp{--vp:#393939;--vphead:#2b2b2b;--vptext:#c9c9c9;--vpdim:#8a8a8a;--sel:#ffa033;
+  background:var(--vphead);border-radius:10px;overflow:hidden;border:1px solid #1c1c1c;box-shadow:0 10px 30px -18px rgba(20,10,40,.6)}
+.vp-head{display:flex;align-items:center;gap:10px;padding:6px 10px;font-family:var(--f-mono);font-size:11.5px;color:var(--vptext);background:var(--vphead);border-bottom:1px solid #1d1d1d;min-width:0}
+.vp-head .ed{background:#3d3d3d;border-radius:4px;padding:2px 8px;white-space:nowrap}
+.vp-head .bm{color:var(--sel);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.vp-head .no{margin-left:auto;color:var(--vpdim);white-space:nowrap}
+.vp-canvas{position:relative;aspect-ratio:1/1;max-width:100%;background:var(--vp)}
+.vp-canvas svg{position:absolute;inset:0;width:100%;height:100%;display:block}
+#tl{display:block;width:100%;height:64px;background:#262626}
+.ov[hidden]{display:none}
+.ov{position:absolute;font-family:var(--f-mono);color:#ddd;background:rgba(30,30,30,.86);border:1px solid #111;border-radius:6px;font-size:11px;line-height:1.35}
+.ov-sk{left:10px;top:10px;padding:8px 10px;width:150px;display:grid;gap:5px}
+.ov-sk .t{color:#9a9a9a;font-size:10px;letter-spacing:.08em;text-transform:uppercase}
+.sk-row{display:grid;grid-template-columns:62px 1fr 30px;gap:6px;align-items:center}
+.sk-bar{height:6px;background:#4a4a4a;border-radius:3px;overflow:hidden}
+.sk-bar i{display:block;height:100%;width:0;background:#4772b3;transition:width .35s}
+.sk-row .v{text-align:right;font-variant-numeric:tabular-nums;color:#aaa}
+.ov-lip{right:10px;top:10px;padding:8px 12px;text-align:center;min-width:86px}
+.ov-lip .t{color:#9a9a9a;font-size:10px;letter-spacing:.08em;text-transform:uppercase;display:block}
+.ov-lip b{font-family:var(--f-display);font-size:30px;color:var(--sel);display:block;line-height:1.15}
+
+/* Altyazı */
+.caption{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px 14px;display:grid;gap:6px;min-height:118px}
+.cap-top{display:flex;justify-content:space-between;align-items:center;gap:10px;font-family:var(--f-mono);font-size:11.5px;color:var(--muted)}
+.cap-top .who{color:var(--pink);font-weight:600;letter-spacing:.06em;text-transform:uppercase}
+.cap-text{margin:0;font-size:15.5px;line-height:1.55}
+.cap-prog{height:3px;background:var(--surface2);border-radius:2px;overflow:hidden}
+.cap-prog i{display:block;height:100%;width:0;background:var(--accent);transition:width .3s}
+
+/* Kontroller */
+.controls{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.btn{font:600 14px/1 var(--f-body);border:1px solid var(--line);background:var(--surface);color:var(--fg);border-radius:8px;padding:10px 14px;cursor:pointer;display:inline-flex;align-items:center;gap:8px}
+.btn:hover{border-color:var(--accent)}
+.btn svg{width:14px;height:14px;fill:currentColor}
+.btn.play{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);flex:1;justify-content:center;min-width:170px}
+.btn.icon{padding:10px 12px}
+.dots{display:flex;gap:4px;flex-wrap:wrap;width:100%}
+.dots button{flex:1;min-width:14px;height:8px;border:0;border-radius:4px;background:var(--surface2);cursor:pointer;padding:0}
+.dots button.done{background:color-mix(in srgb,var(--accent) 45%,var(--surface2))}
+.dots button.on{background:var(--accent)}
+.settings{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px 12px;font-size:13px;color:var(--muted);background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+.settings label{display:grid;gap:4px;min-width:0}
+.settings select,.settings input[type=range]{width:100%;font:inherit;color:var(--fg);background:var(--surface2);border:1px solid var(--line);border-radius:6px;padding:5px 6px}
+.settings .chk{grid-column:1/-1;display:flex;align-items:center;gap:8px}
+.settings .note{grid-column:1/-1;margin:0;font-size:12.5px;color:var(--muted)}
+.settings .note.warn{color:var(--pink)}
+
+/* ---------- Bölümler ---------- */
+.chapters{display:grid;gap:22px;min-width:0}
+.toc{display:flex;flex-wrap:wrap;gap:6px;margin:0;padding:0;list-style:none}
+.toc a{display:inline-block;font-size:13px;text-decoration:none;color:var(--muted);border:1px solid var(--line);border-radius:999px;padding:4px 10px;background:var(--surface)}
+.toc a:hover,.toc a.on{color:var(--accent-ink);background:var(--accent);border-color:var(--accent)}
+.chap{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:24px clamp(16px,3vw,32px);display:grid;gap:14px;scroll-margin-top:16px;transition:border-color .3s, box-shadow .3s;min-width:0}
+.chap.on{border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 18%,transparent)}
+.chap-head{display:flex;gap:14px;align-items:flex-start;justify-content:space-between;flex-wrap:wrap}
+.chap-num{font-family:var(--f-mono);font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin:0 0 4px}
+.chap-num .mode{color:var(--accent)}
+.chap h2{font-family:var(--f-display);font-weight:600;font-size:clamp(20px,2.6vw,27px);line-height:1.2;margin:0;text-wrap:balance}
+.chap h3{font-family:var(--f-mono);font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin:8px 0 0;font-weight:600}
+.chap p{margin:0;max-width:72ch}
+.chap ol.steps{margin:0;padding-left:1.4em;display:grid;gap:6px;max-width:72ch}
+.chap ol.steps li::marker{font-family:var(--f-mono);color:var(--accent);font-weight:600}
+.keys{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:6px 18px;margin:0;padding:0;list-style:none}
+.keys li{display:flex;gap:10px;align-items:baseline;font-size:14.5px;min-width:0}
+.keys .kk{flex:none;display:inline-flex;gap:3px;flex-wrap:wrap}
+kbd{font-family:var(--f-mono);font-size:12px;background:var(--surface2);border:1px solid var(--line);border-bottom-width:2px;border-radius:5px;padding:1px 6px;color:var(--fg);white-space:nowrap}
+.callouts{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:10px}
+.call{border-radius:10px;padding:12px 14px;font-size:14.5px;line-height:1.55}
+.call b{display:block;font-family:var(--f-mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;margin-bottom:4px}
+.call.tip{background:var(--tipbg)} .call.tip b{color:var(--accent)}
+.call.warn{background:var(--warnbg)} .call.warn b{color:var(--pink)}
+.listen{font-size:13px;padding:8px 12px}
+
+/* Ek bölümler */
+.extra{display:grid;gap:14px;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:24px clamp(16px,3vw,32px)}
+.extra h2{font-family:var(--f-display);font-weight:600;font-size:clamp(20px,2.6vw,27px);margin:0}
+.weeks{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;margin:0;padding:0;list-style:none}
+.weeks li{border:1px solid var(--line);border-radius:10px;padding:12px 14px;background:var(--bg);font-size:14.5px}
+.weeks li b{display:block;font-family:var(--f-mono);font-size:12px;color:var(--accent);letter-spacing:.08em;text-transform:uppercase}
+.check{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+.check label{display:flex;gap:10px;align-items:flex-start;cursor:pointer}
+.check input{margin-top:5px;accent-color:var(--accent);width:16px;height:16px;flex:none}
+.check .cnt{font-family:var(--f-mono);font-size:13px;color:var(--muted)}
+.res{margin:0;padding-left:1.2em;display:grid;gap:6px}
+footer{padding-block:0 48px;color:var(--muted);font-size:13px}
+
+/* ---------- Sahne (SVG) ---------- */
+.st{--c-skin:#ffe5d6;--c-shade:#f3b3a6;--c-hair:#d6476f;--c-hairdk:#a32b55;--c-hairhi:#f793ad;--c-shirt:#f6f5fb;--c-ink:#3b1d2a;--c-ribbon:#e0474c}
+.f{stroke:none}
+.skin{fill:var(--c-skin)} .shade{fill:var(--c-shade)} .hair{fill:var(--c-hair)} .hairbk{fill:var(--c-hairdk)} .hairhi{fill:var(--c-hairhi)}
+.white{fill:#fff} .iris{fill:url(#irisGrad)} .pupil{fill:#1d1033} .hi{fill:#fff} .shirt{fill:var(--c-shirt)} .shirtsh{fill:#d9d6ea} .ribbon{fill:var(--c-ribbon)}
+.blush{fill:#ff7f9a;opacity:.45} .mouthO{fill:#7b2337}
+.ink{fill:none;stroke:var(--c-ink);stroke-linecap:round;stroke-linejoin:round}
+#wire,.bones,#guides,#scene,#uvpanel,#camframe,#mic,#sparkles,#rim,#cube,#eyesHappy{display:none}
+.shade,.blush{display:none}
+.st.shaded .shade,.st.shaded .blush{display:inline}
+.st.show-wire #wire,.st.show-bones .bones,.st.show-guides #guides,.st.show-scene #scene,.st.show-uv #uvpanel,
+.st.show-cam #camframe,.st.show-mic #mic,.st.show-spark #sparkles,.st.show-rim #rim,.st.show-cube #cube{display:inline}
+.st.hide-char #char{display:none}
+.st.hide-grid .gridbg{display:none}
+/* çizim / eskiz */
+.st.look-sketch .f{fill:none;stroke:#e6dcc6;stroke-width:1.4}
+.st.look-sketch .ink{stroke:#e6dcc6}
+.st.look-sketch .hi,.st.look-sketch .pupil{display:none}
+/* tel kafes */
+.st.look-wire .f{fill:#a2a2a2;stroke:#141414;stroke-width:.8}
+.st.look-wire .ink{stroke:#141414}
+.st.look-wire .hi{display:none}
+.st.look-hairsel .f.hair,.st.look-hairsel .f.hairbk,.st.look-hairsel .f.hairhi{fill:#c9935f;stroke:#ffa033;stroke-width:1.3}
+/* UV */
+.st.look-uv .f.skin{fill:url(#checker)}
+.st.look-uv .f.hair,.st.look-uv .f.hairbk,.st.look-uv .f.hairhi{fill:url(#checker2)}
+/* kontur */
+.st.outline .f.ol{stroke:var(--c-ink);stroke-width:3;stroke-linejoin:round}
+.st.outline .f.ol.hair,.st.outline .f.ol.hairbk{stroke:#5b1430}
+/* ağırlık boyama */
+.st.look-weight .f{fill:url(#wgrad);stroke:#101010;stroke-width:.5}
+.st.look-weight .f.shirt,.st.look-weight .f.shirtsh,.st.look-weight .f.ribbon{fill:#1f35c9}
+.st.look-weight .ink,.st.look-weight .hi{display:none}
+/* hareketler */
+.blinkG,.eyeX,.pupil,.brow{transform-box:fill-box;transform-origin:center}
+.eyeX,.brow,.pupil{transition:transform .3s ease, opacity .2s}
+.headrot{transform-box:view-box;transform-origin:200px 300px}
+.st.blink .blinkG{animation:blink 4.4s infinite}
+.st.tilt-step .headrot{animation:tilt 1.7s steps(20) infinite alternate}
+.st.tilt-smooth .headrot{animation:tilt 2.6s ease-in-out infinite alternate}
+.st.tilt-slow .headrot{animation:tilt 5s ease-in-out infinite alternate}
+@keyframes blink{0%,91%,100%{transform:scaleY(1)}94%{transform:scaleY(.08)}97%{transform:scaleY(1)}}
+@keyframes tilt{from{transform:rotate(-4.5deg)}to{transform:rotate(4.5deg)}}
+#mic .arc{animation:pulse 1.2s ease-in-out infinite}
+#mic .arc.a2{animation-delay:.25s}
+@keyframes pulse{0%,100%{opacity:.15}50%{opacity:1}}
+#sparkles path{transform-box:fill-box;transform-origin:center;animation:twinkle 2.2s ease-in-out infinite}
+#sparkles path:nth-child(2){animation-delay:.7s} #sparkles path:nth-child(3){animation-delay:1.3s} #sparkles path:nth-child(4){animation-delay:.4s}
+@keyframes twinkle{0%,100%{transform:scale(.3);opacity:.2}50%{transform:scale(1);opacity:1}}
+@media (prefers-reduced-motion: reduce){
+  .st .blinkG,.st .headrot,#mic .arc,#sparkles path{animation:none!important}
+  .chap,.cap-prog i,.sk-bar i{transition:none}
+}
+</style>
+
+<header class="wrap top">
+  <p class="eyebrow">Blender · Sıfırdan konuşan bir anime karakteri</p>
+  <h1>Anime Karakter <span class="k">Atölyesi</span></h1>
+  <p class="lede">Bu sayfa, Blender'da bir anime karakterini tasarlamaktan, modellemeye, boyamaya, iskelet takmaya, canlandırmaya, seslendirip dudaklarını konuşmaya uydurmaya ve videoyu dışa aktarmaya kadar tüm yolu adım adım anlatır. Soldaki <b>viewport</b> her bölümde karakterin o aşamadaki halini canlı olarak gösterir. <b>Anlatımı başlat</b> düğmesine basarsan bölümler Türkçe sesli anlatımla ve altyazıyla sırayla oynar, karakter de anlatıcıyla birlikte konuşur.</p>
+  <div class="meta" id="meta"></div>
+</header>
+
+<div class="wrap main">
+  <aside class="player" aria-label="Animasyonlu anlatım oynatıcısı">
+    <div class="vp">
+      <div class="vp-head"><span class="ed" id="vpEd">3D Viewport</span><span class="bm" id="vpBm">Object Mode</span><span class="no" id="vpNo">01 / 14</span></div>
+      <div class="vp-canvas">
+        <svg id="stage" class="st" viewBox="0 0 400 400" role="img" aria-label="Bölüme göre değişen anime karakteri sahnesi">
+          <defs>
+            <pattern id="grid" width="25" height="25" patternUnits="userSpaceOnUse"><path d="M25 0H0V25" fill="none" stroke="#454545" stroke-width="1"/></pattern>
+            <pattern id="checker" width="14" height="14" patternUnits="userSpaceOnUse"><rect width="14" height="14" fill="#ececec"/><rect width="7" height="7" fill="#585858"/><rect x="7" y="7" width="7" height="7" fill="#585858"/></pattern>
+            <pattern id="checker2" width="14" height="14" patternUnits="userSpaceOnUse"><rect width="14" height="14" fill="#f4b2c4"/><rect width="7" height="7" fill="#b03a62"/><rect x="7" y="7" width="7" height="7" fill="#b03a62"/></pattern>
+            <linearGradient id="irisGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2a1d6e"/><stop offset=".55" stop-color="#5a46c4"/><stop offset="1" stop-color="#a99cf5"/></linearGradient>
+            <linearGradient id="wgrad" x1="0" y1="60" x2="0" y2="345" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#ff2200"/><stop offset=".72" stop-color="#ff2a00"/><stop offset=".8" stop-color="#ffd400"/><stop offset=".86" stop-color="#35e000"/><stop offset=".92" stop-color="#00c8f0"/><stop offset="1" stop-color="#1f35c9"/></linearGradient>
+            <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#6fb6ff"/><stop offset=".65" stop-color="#bfe0ff"/><stop offset="1" stop-color="#ffe0ea"/></linearGradient>
+            <radialGradient id="sunG"><stop offset="0" stop-color="#fffbe6"/><stop offset=".4" stop-color="#fff2b8" stop-opacity=".9"/><stop offset="1" stop-color="#fff2b8" stop-opacity="0"/></radialGradient>
+            <clipPath id="faceClip"><path d="M130 170 C130 120 165 95 200 95 C235 95 270 120 270 170 C270 215 255 250 228 278 C215 290 205 296 200 296 C195 296 185 290 172 278 C145 250 130 215 130 170 Z"/></clipPath>
+          </defs>
+          <rect width="400" height="400" fill="#393939"/>
+          <rect class="gridbg" width="400" height="400" fill="url(#grid)"/>
+
+          <g id="scene">
+            <rect width="400" height="400" fill="url(#sky)"/>
+            <circle cx="330" cy="70" r="70" fill="url(#sunG)"/>
+            <g fill="#ffffff" opacity=".9"><ellipse cx="70" cy="90" rx="42" ry="13"/><ellipse cx="95" cy="80" rx="26" ry="14"/><ellipse cx="300" cy="150" rx="36" ry="10"/><ellipse cx="320" cy="142" rx="20" ry="11"/></g>
+            <path d="M0 330 L40 300 L70 318 L110 285 L150 320 L250 320 L290 290 L330 315 L360 296 L400 322 L400 400 L0 400 Z" fill="#9fc7ee" opacity=".7"/>
+          </g>
+
+          <g id="cube">
+            <path d="M-100 84 L500 432" stroke="#c2443a" stroke-width="1.5" opacity=".85"/>
+            <path d="M500 84 L-100 432" stroke="#6f9b2d" stroke-width="1.5" opacity=".85"/>
+            <path d="M200 150 L262 186 L200 222 L138 186 Z" fill="#b8b8b8"/>
+            <path d="M138 186 L200 222 L200 294 L138 258 Z" fill="#8c8c8c"/>
+            <path d="M262 186 L262 258 L200 294 L200 222 Z" fill="#a4a4a4"/>
+            <path d="M200 150 L262 186 L262 258 L200 294 L138 258 L138 186 Z" fill="none" stroke="#ffa033" stroke-width="2"/>
+            <circle cx="200" cy="222" r="3" fill="#ffa033"/>
+            <g transform="translate(92 330)"><circle r="11" fill="none" stroke="#fff" stroke-width="2" stroke-dasharray="4 4"/><circle r="11" fill="none" stroke="#e23b3b" stroke-width="2" stroke-dasharray="4 4" stroke-dashoffset="4"/><path d="M-18 0H-7M7 0H18M0 -18V-7M0 7V18" stroke="#111" stroke-width="1.5"/></g>
+            <g transform="translate(318 96)" fill="none" stroke="#111" stroke-width="1.5"><path d="M0 0 L36 -14 L36 14 Z M0 0 L36 -14 M36 -14 L36 14"/><path d="M18 -20 L26 -30 L34 -20 Z" fill="#111"/></g>
+            <g transform="translate(70 92)" stroke="#111" stroke-width="1.5" fill="none"><circle r="8"/><path d="M0 -16V-11M0 11V16M-16 0H-11M11 0H16M-11 -11L-8 -8M8 8L11 11M-11 11L-8 8M8 -8L11 -11"/></g>
+          </g>
+
+          <g id="char">
+            <g class="headrot"><path class="f hairbk ol" d="M108 190 C96 110 145 58 200 58 C258 58 304 110 292 190 C296 240 290 280 280 304 L262 262 L262 200 L138 200 L138 262 L120 304 C108 278 104 235 108 190 Z"/></g>
+            <g id="body">
+              <path class="f skin ol" d="M183 268 L217 268 L221 336 L179 336 Z"/>
+              <path class="f shade" d="M180 284 L220 284 L221 306 C212 296 188 296 179 306 Z"/>
+              <path class="f shirt ol" d="M108 400 C112 352 148 334 200 334 C252 334 288 352 292 400 Z"/>
+              <path class="f shirtsh" d="M252 344 C276 356 286 376 289 400 L262 400 C262 380 258 360 252 344 Z"/>
+              <path class="ink" stroke-width="2.5" d="M180 335 L200 364 L220 335"/>
+              <path class="f ribbon ol" d="M200 366 L182 356 L185 378 Z M200 366 L218 356 L215 378 Z"/>
+              <circle class="f ribbon" cx="200" cy="366" r="5"/>
+              <g class="bones" id="bonesBody"></g>
+            </g>
+            <g id="head" class="headrot">
+              <ellipse class="f skin ol" cx="132" cy="198" rx="8" ry="14"/>
+              <ellipse class="f skin ol" cx="268" cy="198" rx="8" ry="14"/>
+              <path class="f skin ol" d="M130 170 C130 120 165 95 200 95 C235 95 270 120 270 170 C270 215 255 250 228 278 C215 290 205 296 200 296 C195 296 185 290 172 278 C145 250 130 215 130 170 Z"/>
+              <g clip-path="url(#faceClip)">
+                <path class="f shade" d="M118 150 L282 150 L282 188 L266 174 L254 196 L240 170 L224 192 L208 166 L192 192 L176 170 L162 196 L148 174 L134 198 L118 188 Z"/>
+                <path class="f shade" d="M250 160 C268 202 262 248 230 284 L284 290 L284 160 Z"/>
+              </g>
+              <ellipse class="blush" cx="158" cy="238" rx="11" ry="4.5"/>
+              <ellipse class="blush" cx="242" cy="238" rx="11" ry="4.5"/>
+              <g class="eyeWrap" id="eyeWrapL">
+                <g class="blinkG"><g class="eyeX">
+                  <ellipse class="f white" cx="168" cy="209" rx="19" ry="17"/>
+                  <ellipse class="f iris" cx="170" cy="211" rx="12" ry="15"/>
+                  <ellipse class="f pupil" cx="170" cy="213" rx="5.5" ry="8"/>
+                  <circle class="f hi" cx="165" cy="204" r="4.5"/>
+                  <circle class="f hi" cx="176" cy="219" r="2"/>
+                  <path class="ink" stroke-width="4.5" d="M146 205 C151 190 180 186 192 198"/>
+                  <path class="ink" stroke-width="3" d="M147 204 L140 199"/>
+                  <path class="ink" stroke-width="1.5" d="M155 225 Q168 229 182 224"/>
+                </g></g>
+              </g>
+              <g id="eyesHappy"><path class="ink" stroke-width="4" d="M150 212 Q168 194 188 212"/><path class="ink" stroke-width="4" d="M212 212 Q232 194 250 212"/></g>
+              <path class="ink brow" id="browL" stroke-width="3" d="M152 182 Q168 174 184 179"/>
+              <path class="ink brow" id="browR" stroke-width="3" d="M216 179 Q232 174 248 182"/>
+              <path class="ink" stroke-width="1.6" d="M201 227 L198 237 L203 237"/>
+              <path class="ink" id="mouthLine" stroke-width="2.5" d="M190 258 Q200 264 210 258"/>
+              <ellipse class="f mouthO" id="mouthO" cx="200" cy="261" rx="0" ry="0"/>
+              <path class="f hair ol" d="M126 160 C118 200 116 240 122 270 L132 232 L138 264 L146 200 Z"/>
+              <path class="f hair ol" d="M274 160 C282 200 284 240 278 270 L268 232 L262 264 L254 200 Z"/>
+              <path class="f hair ol" d="M122 178 C116 108 160 70 205 72 C252 74 284 110 278 178 L266 150 L254 176 L240 146 L224 172 L208 142 L192 172 L176 146 L162 176 L148 150 L134 180 Z"/>
+              <path class="f hairhi" d="M146 112 C178 98 222 98 254 112 L250 121 C220 108 180 108 150 121 Z"/>
+              <path id="rim" d="M263 140 C276 196 264 246 232 280" fill="none" stroke="#fff6cf" stroke-width="3" stroke-linecap="round" opacity=".9"/>
+              <g id="wire" clip-path="url(#faceClip)" fill="none" stroke="#141414" stroke-width="1"></g>
+              <g class="bones" id="bonesHead"></g>
+            </g>
+          </g>
+
+          <g id="guides" font-family="JetBrains Mono, monospace" font-size="10" fill="#e6dcc6">
+            <g stroke="#7fb4ff" stroke-width="1" stroke-dasharray="5 4" opacity=".8">
+              <path d="M8 95H392M8 209H392M8 232H392M8 259H392M8 296H392"/><path d="M200 40V396"/>
+            </g>
+            <text x="10" y="90">tepe</text><text x="10" y="204">göz</text><text x="10" y="228">burun</text><text x="10" y="254">ağız</text><text x="10" y="291">çene</text>
+          </g>
+
+          <g id="mic" transform="translate(52 268)">
+            <rect x="-11" y="-34" width="22" height="40" rx="11" fill="#d4d4d4" stroke="#111" stroke-width="1.5"/>
+            <path d="M-18 -6 C-18 16 18 16 18 -6 M0 12 V34 M-14 34 H14" fill="none" stroke="#d4d4d4" stroke-width="3"/>
+            <path class="arc" d="M26 -30 C36 -20 36 -6 26 4" fill="none" stroke="#ffa033" stroke-width="3" stroke-linecap="round"/>
+            <path class="arc a2" d="M34 -40 C50 -24 50 -2 34 14" fill="none" stroke="#ffa033" stroke-width="3" stroke-linecap="round"/>
+          </g>
+
+          <g id="uvpanel" transform="translate(266 10)">
+            <rect width="124" height="124" fill="#232323" stroke="#555"/>
+            <rect width="124" height="124" fill="url(#grid)" opacity=".7"/>
+            <path d="M130 170 C130 120 165 95 200 95 C235 95 270 120 270 170 C270 215 255 250 228 278 C215 290 205 296 200 296 C195 296 185 290 172 278 C145 250 130 215 130 170 Z" transform="translate(-48 -34) scale(.4)" fill="rgba(255,160,51,.25)" stroke="#ffa033" stroke-width="2.5"/>
+            <path d="M122 178 C116 108 160 70 205 72 C252 74 284 110 278 178 L266 150 L254 176 L240 146 L224 172 L208 142 L192 172 L176 146 L162 176 L148 150 L134 180 Z" transform="translate(47 54) scale(.4)" fill="rgba(255,255,255,.12)" stroke="#d0d0d0" stroke-width="2.5"/>
+            <circle cx="96" cy="22" r="9" fill="rgba(255,255,255,.12)" stroke="#d0d0d0"/><circle cx="96" cy="44" r="9" fill="rgba(255,255,255,.12)" stroke="#d0d0d0"/>
+            <text x="6" y="118" font-family="JetBrains Mono, monospace" font-size="9" fill="#9a9a9a">UV Editor</text>
+          </g>
+
+          <g id="camframe">
+            <path d="M0 0H400V400H0Z M20 20V380H380V20Z" fill="rgba(0,0,0,.38)" fill-rule="evenodd"/>
+            <rect x="20" y="20" width="360" height="360" fill="none" stroke="#111" stroke-width="1.5" stroke-dasharray="7 5"/>
+            <path d="M140 20V380M260 20V380M20 140H380M20 260H380" stroke="#ffffff" stroke-opacity=".25"/>
+            <text x="24" y="14" font-family="JetBrains Mono, monospace" font-size="10" fill="#f0f0f0">Camera · 50 mm · 1920×1080</text>
+          </g>
+
+          <g id="sparkles" fill="#fff8d6">
+            <path d="M80 150 l4 12 l12 4 l-12 4 l-4 12 l-4 -12 l-12 -4 l12 -4 Z"/>
+            <path d="M320 220 l3 9 l9 3 l-9 3 l-3 9 l-3 -9 l-9 -3 l9 -3 Z"/>
+            <path d="M300 60 l3 9 l9 3 l-9 3 l-3 9 l-3 -9 l-9 -3 l9 -3 Z"/>
+            <path d="M96 280 l3 9 l9 3 l-9 3 l-3 9 l-3 -9 l-9 -3 l9 -3 Z"/>
+          </g>
+        </svg>
+        <div class="ov ov-sk" id="skPanel" hidden>
+          <span class="t">Shape Keys</span>
+          <div id="skRows"></div>
+        </div>
+        <div class="ov ov-lip" id="lipBadge" hidden><span class="t">Ağız şekli</span><b id="lipLetter">A</b></div>
+      </div>
+      <canvas id="tl" aria-hidden="true"></canvas>
+    </div>
+
+    <div class="caption" aria-live="polite">
+      <div class="cap-top"><span class="who">Anlatıcı</span><span id="capPos">Bölüm 1 · cümle 1</span></div>
+      <p class="cap-text" id="capText"></p>
+      <div class="cap-prog"><i id="capBar"></i></div>
+    </div>
+
+    <div class="controls">
+      <button class="btn icon" id="prevBtn" type="button" aria-label="Önceki bölüm"><svg viewBox="0 0 16 16"><path d="M3 2h2v12H3zM14 2v12L6 8z"/></svg></button>
+      <button class="btn play" id="playBtn" type="button"><svg viewBox="0 0 16 16" id="playIco"><path d="M4 2l10 6-10 6z"/></svg><span id="playLbl">Anlatımı başlat</span></button>
+      <button class="btn icon" id="nextBtn" type="button" aria-label="Sonraki bölüm"><svg viewBox="0 0 16 16"><path d="M11 2h2v12h-2zM2 2v12l8-6z"/></svg></button>
+      <div class="dots" id="dots" role="group" aria-label="Bölümler"></div>
+    </div>
+
+    <div class="settings">
+      <label for="voiceSel">Anlatıcı sesi<select id="voiceSel"></select></label>
+      <label for="rateIn">Konuşma hızı <span id="rateVal">1.0×</span><input id="rateIn" type="range" min="0.7" max="1.4" step="0.05" value="1"></label>
+      <span class="chk"><input type="checkbox" id="autoIn" checked><label for="autoIn" style="display:inline">Bölüm bitince sonrakine otomatik geç</label></span>
+      <p class="note" id="voiceNote">Sesli anlatım tarayıcının kendi konuşma motoruyla yapılır.</p>
+    </div>
+  </aside>
+
+  <main class="chapters" id="chapters">
+    <nav aria-label="Bölüm listesi"><ul class="toc" id="toc"></ul></nav>
+  </main>
+</div>
+
+<footer class="wrap">Kısayollar Blender'ın varsayılan tuş düzenine ve İngilizce (US) klavye yerleşimine göredir; menü adları Blender 4.x / 5.x arayüzündeki İngilizce adlarla yazılmıştır.</footer>
+
+<script>
+(function(){
+"use strict";
+
+/* =================== İÇERİK =================== */
+const CH = [
+{ id:"arayuz", mode:"cube", title:"Blender'ı tanı: arayüz ve gezinme",
+  narr:"Merhaba! Bu rehberde Blender'da sıfırdan bir anime karakteri yapıp onu konuşturmaya kadar her adımı birlikte göreceğiz. Önce arayüzü tanıyalım. Blender'ı açtığında ortada 3D Viewport, sağ üstte Outliner, sağ altta Properties paneli, en altta da Timeline bulunur. Sahnede gezinmek için orta fare tuşuyla döndür, Shift ile birlikte kaydır, tekerlekle yakınlaş. Nesneleri G ile taşı, R ile döndür, S ile ölçekle. Tab tuşu Object Mode ile Edit Mode arasında geçiş yapar. Bu birkaç kısayolu parmakların ezberleyene kadar tekrar et, çünkü her şey bunların üzerine kurulu.",
+  intro:[
+   "Blender ücretsiz ve açık kaynaklı bir 3D programıdır; modelleme, sculpt, doku, rig, animasyon, render, kompozit ve video kurgu tek bir programın içinde yer alır. Bu yüzden ilk bakışta kalabalık görünür. Aslında ekran, <b>editör</b> denen panellerden oluşur ve her panelin sol üst köşesindeki menüden türünü değiştirebilirsin.",
+   "En üstteki sekmeler <b>Workspace</b> (çalışma alanı) adını taşır: Layout, Modeling, Sculpting, UV Editing, Texture Paint, Shading, Animation, Rendering, Compositing. Her biri, o iş için hazır dizilmiş editör düzenidir. Bu rehberde neredeyse hepsini kullanacağız.",
+   "Bir nesnenin <b>modu</b> ne yapabileceğini belirler. Object Mode nesneyi bütün olarak taşır; Edit Mode noktalarını (vertex), kenarlarını (edge) ve yüzlerini (face) düzenler; Sculpt Mode kil gibi şekillendirir; Pose Mode iskeleti hareket ettirir; Weight Paint, iskeletin modeli ne kadar etkilediğini boyar."
+  ],
+  steps:[
+   "blender.org adresinden son kararlı sürümü ya da uzun destekli (LTS) sürümü indir ve kur.",
+   "Edit › Preferences › Input: dizüstü bilgisayardaysan <b>Emulate 3 Button Mouse</b> ve <b>Emulate Numpad</b> seçeneklerini aç.",
+   "Edit › Preferences › Save &amp; Load: Auto Save açık kalsın, aralığı 2 dakikaya indir.",
+   "Varsayılan küpü seç, <kbd>X</kbd> › Delete ile sil; <kbd>Shift</kbd>+<kbd>A</kbd> menüsünden yeni nesneler eklemeyi dene.",
+   "Üstteki çalışma alanı sekmelerini tek tek aç ve hangi editörlerin geldiğine bak.",
+   "Dosyanı <kbd>Ctrl</kbd>+<kbd>S</kbd> ile sık sık kaydet; büyük değişikliklerden önce karakter_v01, karakter_v02 gibi yeni bir kopya al."
+  ],
+  keys:[["MMB","Görünümü döndür (orta tuş)"],["Shift+MMB","Görünümü kaydır"],["Tekerlek","Yakınlaş / uzaklaş"],["Numpad 1","Önden bak"],["Numpad 3","Sağdan bak"],["Numpad 7","Üstten bak"],["Numpad 5","Perspektif / ortografik"],["Numpad .","Seçili nesneye odaklan"],["G","Taşı (Grab)"],["R","Döndür"],["S","Ölçekle"],["Tab","Object / Edit Mode"],["Shift+A","Nesne ekle"],["N","Yan panel"],["F3","Komut arama"],["Ctrl+Space","Paneli büyüt"],["Z","Görünüm modu menüsü"],["Ctrl+Z","Geri al"]],
+  tip:"Bir kısayolu unutursan <kbd>F3</kbd> ile arama kutusunu aç ve komutun adını yaz. Hareket ederken G'den sonra X, Y ya da Z'ye basarsan işlem sadece o eksende olur (örnek: G Z 2 = yukarı 2 birim).",
+  warn:"Object Mode'da ölçeklediğin bir nesnenin ölçeğini uygulamamak. <kbd>Ctrl</kbd>+<kbd>A</kbd> › Scale yapılmazsa Bevel, Solidify ve rig sonradan beklenmedik sonuçlar verir.",
+  check:"Gezinme, G/R/S ve Tab'ı bakmadan kullanabiliyorum"
+},
+{ id:"tasarim", mode:"ref", title:"Plan ve referans: karakter tasarımı",
+  narr:"Modellemeye geçmeden önce karakterini kâğıt üzerinde netleştir. Anime karakterlerinde en önemli şey okunabilir bir siluet ve tutarlı oranlardır. Karakterin önden ve yandan, aynı boyda iki çizimini hazırla; buna model sheet denir. Göz, burun, ağız ve çene hizalarını yatay kılavuz çizgileriyle iki çizimde eşleştir. Sonra bu görselleri Blender'a referans resmi olarak ekle ve ön ile yan görünümlere sabitle. İyi bir referans, modelleme süresini yarı yarıya kısaltır.",
+  intro:[
+   "Anime stili, gerçekçi anatomiden bilinçli olarak sapar: kafa vücuda göre büyüktür (yetişkin bir karakter için yaklaşık 6–7 baş boyu, chibi için 2–3), gözler iri ve yüzün yatay ortasının biraz altındadır, burun çoğu zaman tek bir çizgi ya da küçük bir gölgedir, çene sivri ve yanaklar yumuşaktır.",
+   "Karakterin kimliğini üç şey taşır: <b>siluet</b> (saç şekli en güçlü işarettir), <b>renk paleti</b> (3–4 ana renk yeter) ve <b>kişilik</b> (duruş, ifade, kıyafet). Bunlara modellemeden önce karar ver; Blender'da fikir değiştirmek kâğıda göre çok daha pahalıdır.",
+   "Bir <b>model sheet</b> en az ön ve yan görünümden oluşur; istersen arkadan ve 3/4 açıdan da çiz. Ayrıca yüz için ayrı bir sayfada büyük boy ön ve yan çizim hazırla, çünkü yüz en çok vakit alan kısım olacak."
+  ],
+  steps:[
+   "Kâğıtta ya da Krita gibi ücretsiz bir çizim programında karakterin önden ve yandan görünüşünü aynı boyda çiz.",
+   "İki çizimin üzerine yatay kılavuz çizgileri çek: tepe, göz, burun, ağız, çene, omuz, bel, diz. Çizgiler iki görünümde aynı yüksekliğe denk gelmeli.",
+   "Renk paletini belirle: ten, ten gölgesi, saç, saç gölgesi, göz, kıyafet renkleri.",
+   "Blender'da <kbd>Numpad 1</kbd> ile ön görünüme geç, <kbd>Shift</kbd>+<kbd>A</kbd> › Image › Reference ile ön çizimi ekle.",
+   "<kbd>Numpad 3</kbd> ile yan görünüme geç ve yan çizimi aynı şekilde ekle; ikisini aynı ölçeğe getir.",
+   "Resmin Object Data ayarlarında Opacity'yi 0.3–0.5 yap, <b>Only Axis Aligned</b> seçeneğini aç. Outliner'da seçilemez yap ki modellerken yanlışlıkla taşımayasın."
+  ],
+  keys:[["Shift+A","Image › Reference ekle"],["Numpad 1","Ön görünüm"],["Numpad 3","Yan görünüm"],["Numpad 5","Ortografik görünüm"],["Alt+Z","X-Ray (içini gör)"],["H","Seçileni gizle"],["Alt+H","Gizlenenleri göster"]],
+  tip:"Sevdiğin 2–3 anime tarzını incele ama birebir kopyalama; göz şekli, saç tutamlarının kalınlığı ve çizgi kalınlığı gibi kararları bilinçli ver. Basit bir tasarımla başlamak ilk karakter için en akıllıca yoldur.",
+  warn:"Ön ve yan çizimlerin boyları ya da göz hizaları farklıysa model hiçbir zaman ikisine birden oturmaz. Kılavuz çizgilerini atlamak, saatlerce düzeltme demektir.",
+  check:"Önden ve yandan, hizaları tutan model sheet hazır ve Blender'da"
+},
+{ id:"kafa", mode:"wire", title:"Modelleme: kafa ve yüz",
+  narr:"Şimdi en kritik bölüm: yüz modelleme. Anime yüzü için en sağlam yöntem box modeling ya da poly by poly modellemedir. Bir küp veya düzlemle başla, Mirror modifier ekleyerek yüzün yalnızca yarısını modelle; diğer yarısı otomatik oluşur. Gözün ve ağzın etrafında dairesel kenar halkaları, yani edge loop'lar oluştur; bunlar ileride göz kırpma ve konuşma animasyonunun düzgün bükülmesini sağlar. Poligon sayısını düşük tut, sonra Subdivision Surface ile yumuşat. Mümkün olduğunca dörtgen yüzeyler, yani quad'lar kullan.",
+  intro:[
+   "<b>Topoloji</b>, yüzeyin hangi poligonlardan ve hangi düzende oluştuğudur. Animasyonda iyi bükülen bir yüz için kenar akışı kasları takip etmelidir: gözün ve ağzın çevresinde iç içe halkalar, burundan ağız kenarına inen bir hat, alından şakağa ve çeneye uzanan düzgün sıralar.",
+   "Üç yaygın yöntem vardır. <b>Box modeling</b>: küpten başlayıp bölerek şekillendirirsin. <b>Poly-by-poly</b>: referansın üzerine tek tek yüzey dökerek ilerlersin; anime yüzlerinde en temiz sonucu verir. <b>Sculpt + retopology</b>: önce kil gibi şekillendirip sonra üzerine temiz bir ağ örersin; daha ileri seviyedir.",
+   "Anime yüzü gerçekçi yüze göre daha düzdür: burun köprüsü neredeyse yoktur, göz çukuru sığdır, yanaklar yuvarlak ve çene sivridir. Gözler genellikle hafif içbükey bir yüzeye uygulanan doku ile ya da yüzün içine yerleştirilmiş, üzerine iris çizilmiş basık kürelerle yapılır."
+  ],
+  steps:[
+   "<kbd>Shift</kbd>+<kbd>A</kbd> › Mesh › Cube ekle; bir Subdivision Surface uygulayıp kafa büyüklüğünde yuvarlak bir taban elde et (ya da 12 segmentli bir UV Sphere kullan).",
+   "<kbd>Tab</kbd> ile Edit Mode'a geç, <kbd>Numpad 1</kbd> ile önden bak, sol yarının noktalarını seçip sil. Modifiers panelinden <b>Mirror</b> ekle ve <b>Clipping</b>'i aç.",
+   "Vertex modunda (<kbd>1</kbd>) noktaları <kbd>G</kbd> ile referansa oturt; <kbd>Numpad 3</kbd> ile yandan bakıp profili (alın, burun, dudak, çene) düzelt.",
+   "Göz bölgesindeki yüzeyleri seç, <kbd>I</kbd> ile içe kenar (inset) aç; <kbd>Ctrl</kbd>+<kbd>R</kbd> ile çevresine 2–3 halka ekle.",
+   "Ağız için aynı işlemi yap, sonra <kbd>E</kbd> ile içe doğru çekerek ağız boşluğu oluştur.",
+   "Burun için tek bir noktayı hafifçe öne çek; anime burnu belirgin olmamalı.",
+   "Alt yüzleri seçip <kbd>E</kbd> ile aşağı çekerek boynu oluştur.",
+   "Object Mode'da <kbd>Ctrl</kbd>+<kbd>2</kbd> ile Subdivision Surface ekle, sağ tık › <b>Shade Smooth</b>. Kulakları ayrı modelleyip <kbd>Ctrl</kbd>+<kbd>J</kbd> ile birleştirebilirsin."
+  ],
+  keys:[["1 / 2 / 3","Vertex / Edge / Face seçimi"],["E","Extrude (çekip uzat)"],["I","Inset (içe kenar)"],["Ctrl+R","Loop cut (halka ekle)"],["K","Knife (bıçak)"],["M","Merge (birleştir)"],["F","Yüz / kenar doldur"],["Alt+Click","Halkayı seç"],["Ctrl+1…3","Subdivision ekle"],["O","Proportional editing"],["Alt+Z","X-Ray"],["Ctrl+J","Nesneleri birleştir"]],
+  tip:"Proportional Editing (<kbd>O</kbd>) açıkken bir noktayı çektiğinde çevresi de yumuşakça gelir; fare tekerleğiyle etki alanını büyütüp küçült. Yanak ve çene hatlarını şekillendirmek için birebirdir.",
+  warn:"Göz ve ağız çevresinde üçgen ya da beş ve daha fazla kenarlı yüzeyler (n-gon) bırakmak. Animasyonda kırışık ve gölge hatası yapar. Select › Select All by Trait › Faces by Sides ile bunları bulabilirsin.",
+  check:"Mirror'lı, quad ağırlıklı, göz ve ağız halkaları olan bir kafa"
+},
+{ id:"govde", mode:"hair", title:"Vücut, saç ve kıyafet",
+  narr:"Kafa bitti, sıra vücutta. Gövdeyi bir silindirden başlayarak, yine Mirror ile yarısını modelleyerek oluştur. Kollar ve bacaklar da silindirlerden extrude edilir. Eklem yerlerine, yani dirsek, diz ve omuza, ekstra halkalar ekle ki animasyonda düzgün bükülsünler. Anime saçı genellikle ayrı ayrı tutamlardan oluşur: her tutamı bir eğri ya da düzlem olarak modelleyip kafanın üzerine yerleştir. Kıyafetleri gövdeden yüzleri kopyalayarak ve Solidify ile kalınlık vererek hızlıca yapabilirsin.",
+  intro:[
+   "Vücutta da kafadaki kuralı uygula: düşük poligonla başla, Mirror ile simetrik çalış, en son Subdivision ile yumuşat. Eklemler (omuz, dirsek, bilek, kalça, diz) bükülecek yerlerdir; her birine en az üç halka koy.",
+   "<b>Saç</b> anime karakterinin imzasıdır. İki pratik yol var. Birincisi <b>eğri (curve) yöntemi</b>: Bezier eğrisine Bevel derinliği verip bir Taper eğrisiyle ucunu incelttiğinde tutam elde edersin; şekli istediğin an değiştirebilirsin. İkincisi <b>ağ (mesh) yöntemi</b>: bir düzlemi extrude edip uçta noktaları birleştirerek tutam yaparsın. Blender'ın gerçekçi saç sistemi (Hair Curves) anime için uygun değildir.",
+   "<b>Eller</b> ilk karakterde zorlayabilir; parmakları önce kutu olarak extrude et, sonra yuvarlat. <b>Kıyafetler</b> için en hızlı yol, vücuttaki ilgili yüzleri kopyalayıp ayrı nesne yapmak ve Solidify ile kalınlık vermektir."
+  ],
+  steps:[
+   "Gövde: 8 kenarlı bir Cylinder ekle, yarısını sil, Mirror ekle; <kbd>E</kbd> ile göğüs ve omuz seviyelerine kadar uzatıp boyunla birleştir.",
+   "Kollar: omuzdaki yüzü <kbd>E</kbd> ile dışarı çek; dirsek ve bilek civarına <kbd>Ctrl</kbd>+<kbd>R</kbd> ile üçer halka ekle.",
+   "Bacaklar: kalçanın alt yüzünden <kbd>E</kbd> ile aşağı çek; diz için üç halka ekle; ayak için öne doğru extrude et.",
+   "Eller: küp ekle, parmak sayısı kadar ön yüzü ayrı ayrı <kbd>E</kbd> ile uzat; başparmağı yan yüzden çıkar.",
+   "Saç: <kbd>Shift</kbd>+<kbd>A</kbd> › Curve › Bezier ekle; Object Data › Geometry › Bevel Depth ver, Taper ile ucunu incelt. Kopyalayıp (<kbd>Shift</kbd>+<kbd>D</kbd>) döndürerek kafanın etrafına diz: önce perçem, sonra yanlar, en son arka.",
+   "Kıyafet: Edit Mode'da gövdenin tişört bölgesini seç, <kbd>Shift</kbd>+<kbd>D</kbd> ile kopyala, <kbd>P</kbd> › Selection ile ayrı nesne yap, Solidify ekle ve biraz şişir (<kbd>Alt</kbd>+<kbd>S</kbd>).",
+   "Bittiğinde tüm nesnelerde <kbd>Ctrl</kbd>+<kbd>A</kbd> › All Transforms yap ve Outliner'da anlamlı isimler ver: Kafa, Govde, Sac_On, Sac_Arka, Etek…"
+  ],
+  keys:[["P","Seçimi ayrı nesne yap"],["Ctrl+J","Birleştir"],["Shift+D","Kopyala"],["Alt+S","Normal yönünde şişir"],["L","Bağlı parçayı seç"],["Ctrl+A","Dönüşümleri uygula"],["Ctrl+L","Bağlantılı seçimi genişlet"],["Shift+Ctrl+Alt+C","Origin ayarla menüsü"]],
+  tip:"Saçı eğrilerle yaparsan tutamların kalınlığını ve kıvrımını sonradan bile tek ayarla değiştirebilirsin. Son haline karar verince Object › Convert › Mesh ile ağa çevir.",
+  warn:"Eklemlerde tek halka bırakmak. Dirsek büküldüğünde 'ezilmiş hortum' görüntüsü oluşur; en az üç halka koy.",
+  check:"Gövde, eller, saç tutamları ve kıyafet modellendi, ölçekler uygulandı"
+},
+{ id:"uv", mode:"uv", title:"UV açma ve dokular",
+  narr:"Modele renk ve desen vermek için önce UV açman gerekir. UV açmak, üç boyutlu yüzeyi bir kâğıt gibi kesip düz bir tabakaya sermektir. Edit Mode'da kenarları seçip Kontrol E ile Mark Seam diyerek dikiş yerlerini işaretle; dikişleri saç çizgisinin altı ya da kulak arkası gibi görünmeyen yerlere koy. Ardından tüm yüzleri seçip U tuşuyla Unwrap yap. Damalı bir test dokusu uygulayıp karelerin eşit ve bozulmasız olduğunu kontrol et. Anime stilinde dokular çoğunlukla düz renk bloklarıdır; gözleri ise ayrı bir dokuya çizmek çok yaygındır.",
+  intro:[
+   "<b>UV haritası</b>, 3D yüzeydeki her noktanın 2D resimde hangi piksele denk geldiğini söyler. Dikiş (seam) koyduğun kenarlardan model kesilir ve parçalar, yani <b>adalar</b> (island), düz bir alana serilir.",
+   "Anime karakterlerinde iki yaklaşım yaygındır. Basit yol: her bölge için ayrı bir malzeme (ten, saç, kıyafet) kullanmak ve sadece göz, kaş, ağız içi gibi detaylar için doku çizmek. Detaylı yol: tüm karakterin UV'sini açıp gölge çizgileri, kıyafet desenleri ve kenar renklerini tek bir dokuya boyamak.",
+   "Gözler anime yüzünün ruhudur. İris için yukarıdan aşağıya koyudan açığa giden bir renk geçişi, üstte koyu bir gölge bandı ve bir iki beyaz parlama noktası klasik görünümü verir."
+  ],
+  steps:[
+   "Kafada dikişleri seç: kafanın arkasından ortadan aşağı, boyun çevresi, kulak arkası. <kbd>Ctrl</kbd>+<kbd>E</kbd> › Mark Seam.",
+   "<kbd>A</kbd> ile tümünü seç, <kbd>U</kbd> › Unwrap.",
+   "UV Editing çalışma alanına geç; sol tarafta UV Editor'da New › Generated Type: <b>UV Grid</b> ile test resmi oluştur ve malzemeye bağla.",
+   "Damalarda büyük farklılık ya da çarpılma varsa dikişleri düzelt, tekrar Unwrap yap.",
+   "UV Editor'da adaları <kbd>G</kbd>, <kbd>R</kbd>, <kbd>S</kbd> ile düzenle; yüz adasını büyük tut, çünkü en çok görünen yer orası. UV › Pack Islands ile alana sığdır.",
+   "Boyamak için Texture Paint çalışma alanını kullan ya da UV › Export UV Layout ile şablonu dışa aktarıp Krita'da çiz.",
+   "Göz dokusunu ayrı bir resimde çiz; parlamaları (highlight) ayrı bir küçük düzlemde ya da ayrı katmanda tut."
+  ],
+  keys:[["Ctrl+E","Mark Seam (dikiş)"],["U","Unwrap menüsü"],["L","UV adasını seç"],["A","Tümünü seç"],["Ctrl+P","Pack Islands (UV Editor)"],["S X 0","Noktaları tek hizaya ölçekle"],["Shift+Ctrl+Alt+S","Shear"]],
+  tip:"Gözü ayrı bir malzeme ve doku yap. Böylece iris rengini tek yerden değiştirebilir, parlama noktalarını animasyonda hareket ettirerek gözlere canlılık katabilirsin.",
+  warn:"Dikişleri yüzün ortasına, burnun üstüne koymak. Doku birleşimi tam görünen yerde belli olur; dikişleri her zaman saçın ya da kıyafetin altına sakla.",
+  check:"Kafa ve vücudun UV'si açık, göz dokusu çizildi"
+},
+{ id:"shading", mode:"toon", title:"Anime shading: toon gölgelendirme",
+  narr:"Anime görünümünün sırrı gölgelendirmede. Gerçekçi yumuşak gölgeler yerine, keskin sınırlı iki ya da üç tonluk gölge kullanırız; buna cel shading denir. Render motoru olarak EEVEE'yi seç. Shader Editor'da Diffuse BSDF düğümünü Shader to RGB'ye, onu da Color Ramp'e bağla. Color Ramp'in geçişini Constant yap; böylece ışık ile gölge arasında keskin bir çizgi oluşur. Açık ton ten rengin, koyu ton ise biraz pembemsi ya da mor tonlu gölge rengin olsun. Yüzde temiz gölge için normalleri yuvarlak bir küreden aktarmak, profesyonel anime modellerinin gizli tekniğidir.",
+  intro:[
+   "<b>Cel shading</b>, el çizimi animedeki boyama tekniğini taklit eder: her yüzey ya ışıkta ya gölgede görünür, arada yumuşak geçiş yoktur. Blender'da bunu, ışığın yüzeye ne kadar çarptığını sayıya çevirip o sayıyı keskin basamaklara bölerek yaparız.",
+   "Düğüm zinciri şudur: <b>Diffuse BSDF → Shader to RGB → Color Ramp → (Emission) → Material Output</b>. Shader to RGB, ışık bilgisini renge çevirir; Color Ramp'te <b>Interpolation: Constant</b> seçince iki renk arasında keskin bir sınır oluşur. Üç durak koyarsan ışık, gölge ve koyu gölge olmak üzere üç tonun olur.",
+   "Anime yüzlerindeki temiz, lekesiz gölge için <b>custom normals</b> kullanılır: kafayı saran bir küre ekler, kafa nesnesine Data Transfer modifier'ı ile kürenin normallerini aktarırsın. Böylece burun ve göz çukurları yüzde garip gölge lekeleri oluşturmaz. Blender 4.1 ve sonrasında Auto Smooth ayarı kaldırıldı; custom normals doğrudan çalışır."
+  ],
+  steps:[
+   "Render Properties › Render Engine: <b>EEVEE</b>.",
+   "Shading çalışma alanına geç; kafayı seçip yeni bir malzeme oluştur, Principled BSDF'i sil.",
+   "<kbd>Shift</kbd>+<kbd>A</kbd> › Shader › Diffuse BSDF; Converter › Shader to RGB; Converter › Color Ramp; Shader › Emission ekle ve sırayla bağlayıp Material Output'a götür.",
+   "Color Ramp'te Interpolation'ı <b>Constant</b> yap; soldaki durağı gölge rengine, sağdakini ten rengine ayarla, sınırı 0.4–0.5 civarına çek.",
+   "Doku varsa: Image Texture'ı ve Color Ramp çıkışını bir Mix Color düğümünde <b>Multiply</b> ile karıştır.",
+   "Kenar ışığı için Layer Weight (Facing) → Color Ramp (Constant) → Mix (Add) zinciri ekle.",
+   "Zinciri seçip <kbd>Ctrl</kbd>+<kbd>G</kbd> ile node group yap; saç ve kıyafet malzemelerinde aynı grubu farklı renklerle kullan.",
+   "Yüz normalleri: kafayı saran bir UV Sphere ekle, kafaya <b>Data Transfer</b> modifier ekle › Face Corner Data › Custom Normals, kaynak nesne: küre."
+  ],
+  keys:[["Shift+A","Düğüm ekle"],["Ctrl+G","Node group yap"],["Tab","Grubun içine gir / çık"],["M","Düğümü sustur (mute)"],["Ctrl+H","Bağlanmayan soketleri gizle"],["Ctrl+Shift+Click","Düğümü önizle (Node Wrangler)"],["Z","Material Preview / Rendered"]],
+  tip:"Gölge rengini sadece ten renginin koyusu yapma; tonu hafif kırmızıya ya da mora kaydır. Anime çizimlerindeki sıcak, canlı görünüm buradan gelir. Saçın üstündeki parlak halka (angel ring) için ayrı bir doku ya da ince bir ağ şeridi kullanılır.",
+  warn:"Shader to RGB düğümü yalnızca EEVEE'de çalışır; Cycles'a geçersen tüm toon görünümü kaybolur.",
+  check:"EEVEE'de iki tonlu cel shading ve temiz yüz gölgesi"
+},
+{ id:"kontur", mode:"outline", title:"Kontur çizgileri",
+  narr:"Anime karakterlerini çizgi film gibi gösteren ikinci öğe konturlardır. En yaygın yöntem inverted hull, yani ters kabuk tekniğidir. Modele Solidify modifier ekle, kalınlığı çok küçük bir değer yap, normalleri ters çevir ve material offset ile kabuğa siyah bir malzeme ver. Bu siyah malzemede Backface Culling açılınca model, kenarlarından ince bir çizgiyle çevrelenmiş görünür. Göz kapağı ve kıyafet kıvrımı gibi iç detay çizgileri için Grease Pencil Line Art ya da Freestyle kullanabilirsin.",
+  intro:[
+   "<b>Inverted hull</b> (ters kabuk) tekniği, modelin biraz büyütülmüş ve içi dışına çevrilmiş bir kopyasını oluşturur. Kameraya bakan yüzleri görünmez yapınca geriye sadece modelin kenarından taşan ince bir siluet kalır. Gerçek zamanlıdır, hızlıdır ve oyun motorlarına da taşınabilir.",
+   "<b>Grease Pencil Line Art</b>, sahnedeki geometriden gerçek 2D çizgiler üretir; iç çizgileri (çene altı, burun, kıyafet katları) yakalamada daha başarılıdır. <b>Freestyle</b> ise render sırasında çizgi çizer, ayarları çok zengindir ama yavaştır.",
+   "Çoğu proje ikisini birlikte kullanır: dış siluet için inverted hull, seçili iç detaylar için Line Art."
+  ],
+  steps:[
+   "Yeni bir malzeme oluştur, adını <b>Kontur</b> koy: Emission rengi koyu kahve ya da siyah.",
+   "Malzemeyi nesnenin malzeme listesine ikinci slot olarak ekle (yüzlere atamana gerek yok).",
+   "Solidify modifier ekle: Thickness 0.005–0.01 (modelin boyutuna göre), Offset 1, Normals › <b>Flip</b> açık, Materials › <b>Material Offset: 1</b>.",
+   "Kontur malzemesinin Settings bölümünde <b>Backface Culling</b>'i aç.",
+   "Burun ucu, parmak uçları gibi yerlerde çizgiyi inceltmek için bir Vertex Group boya ve Solidify'ın Vertex Group alanına ver.",
+   "İç çizgiler için <kbd>Shift</kbd>+<kbd>A</kbd> › Grease Pencil › Scene Line Art (ya da Object Line Art) ekle; Line Art modifier'ında Crease açısını ayarla.",
+   "Saç ve ten için farklı kontur malzemeleri kullanarak çizgi rengini bölgeye göre değiştir."
+  ],
+  keys:[["Ctrl+A","Ölçeği uygula (önce bunu yap)"],["Shift+A","Grease Pencil › Line Art"],["Ctrl+L","Malzemeleri diğer nesnelere kopyala"],["Alt+Z","X-Ray ile kabuğu kontrol et"]],
+  tip:"Çizgi rengini saf siyah yerine her bölgenin koyu tonu yapmak (saçta koyu bordo, tende koyu kahve) modern anime dizilerindeki yumuşak görünümü verir.",
+  warn:"Ölçeği uygulanmamış nesnede Solidify kalınlığı her yönde farklı çıkar ve çizgi bir tarafta kalın, bir tarafta ince görünür. Önce <kbd>Ctrl</kbd>+<kbd>A</kbd> › Scale.",
+  check:"Dış kontur ve gerekli iç çizgiler hazır"
+},
+{ id:"rig", mode:"rig", title:"Rigging ve weight paint",
+  narr:"Karakterin hareket edebilmesi için ona bir iskelet, yani armature eklememiz gerekir. Yeni başlayanlar için en kolay yol Blender ile gelen Rigify eklentisidir. Rigify'ı etkinleştirip bir Human Meta Rig ekle, kemikleri modelinin eklemlerine hizala ve Generate Rig düğmesine bas. Ardından önce modeli, sonra iskeleti seçip Kontrol P ile With Automatic Weights seçeneğini kullan. Weight Paint modunda her kemiğin hangi bölgeyi ne kadar etkilediğini kırmızıdan maviye renklerle görürsün; kırmızı tam etki, mavi hiç etki yok demektir. Dirsek, omuz ve boyun gibi yerlerde ağırlıkları fırçayla düzelt.",
+  intro:[
+   "<b>Armature</b> kemiklerden oluşur; her kemiğin bir başı (head), bir kuyruğu (tail) ve bir ebeveyni (parent) vardır. Ebeveyn kemik hareket edince çocukları da gelir: omuz → üst kol → ön kol → el gibi.",
+   "<b>FK</b> (forward kinematics) kemikleri tek tek döndürmektir; kollarda doğal yaylar çizmek için iyidir. <b>IK</b> (inverse kinematics) eli ya da ayağı bir hedefe koyar, aradaki kemikler kendini ayarlar; ayakların yere basması için şarttır. Rigify ikisini de hazır verir.",
+   "<b>Weight Paint</b>, her noktanın hangi kemiğe ne oranda bağlı olduğunu boyar. Kırmızı 1.0 (tam etki), mavi 0.0 (etki yok). Otomatik ağırlıklar çoğu yerde iyi çalışır, ama omuz, kalça, boyun ve parmak aralarında elle düzeltme gerekir.",
+   "Alternatifler: <b>Mixamo</b> modelini internet üzerinden otomatik rigler ve hazır hareketler verir; <b>Auto-Rig Pro</b> ücretli ama çok güçlü bir eklentidir."
+  ],
+  steps:[
+   "Edit › Preferences › Add-ons bölümünde <b>Rigify</b>'ı ara ve etkinleştir.",
+   "<kbd>Shift</kbd>+<kbd>A</kbd> › Armature › <b>Human (Meta-Rig)</b> ekle; karakterin boyuna göre ölçekle.",
+   "İskeleti seç, Edit Mode'a gir; <kbd>Alt</kbd>+<kbd>Z</kbd> ile X-Ray açıp kemik uçlarını eklemlerin tam ortasına taşı. Armature › Symmetrize ile sağ tarafı sola kopyala.",
+   "Yüzü shape key'lerle yapacaksan meta-rig'deki yüz kemiklerini sil; işin çok sadeleşir.",
+   "Armature Properties › Rigify › <b>Generate Rig</b>.",
+   "Önce modeli, sonra <kbd>Shift</kbd> ile oluşturulan rig'i seç; <kbd>Ctrl</kbd>+<kbd>P</kbd> › <b>With Automatic Weights</b>.",
+   "Pose Mode'da (<kbd>Ctrl</kbd>+<kbd>Tab</kbd>) kolu, bacağı ve kafayı uç pozlara getirip test et; bozulan yerleri Weight Paint modunda Add, Subtract ve Blur fırçalarıyla düzelt.",
+   "Saç, kıyafet aksesuarları ve gözleri kafa kemiğine bağla. Göz takibi için bir hedef kemik ve gözlere Damped Track constraint ekle."
+  ],
+  keys:[["Ctrl+P","Ebeveyn ata / otomatik ağırlık"],["Ctrl+Tab","Pose Mode"],["Alt+G / Alt+R / Alt+S","Pozu sıfırla"],["E","Kemik uzat (Edit Mode)"],["Shift+I","IK ekle"],["F","Fırça boyutu"],["Shift+F","Fırça gücü"],["Ctrl+Click","Weight Paint'te kemik seç"]],
+  tip:"Ağırlıkları test ederken kolu 90 derece bük, bacağı öne kaldır, kafayı yana çevir. Hatalar en çok uç pozlarda ortaya çıkar. Bu test pozlarını Pose Library'ye kaydet, her düzeltmeden sonra tekrar dene.",
+  warn:"Saç, kıyafet ve gözleri kafa kemiğine bağlamayı unutmak. Karakter başını çevirdiğinde saç havada asılı kalır.",
+  check:"Rig oluşturuldu, ağırlıklar uç pozlarda temiz"
+},
+{ id:"ifade", mode:"face", title:"Yüz ifadeleri: shape keys",
+  narr:"Anime karakterini canlı kılan şey yüz ifadeleridir. Yüz ifadelerini en kolay Shape Keys ile yaparız. Object Data özelliklerinde önce Basis anahtarını, sonra her ifade için yeni bir anahtar ekle: göz kırpma, gülümseme, şaşırma, kızgın kaş ve A, İ, U, E, O ağız şekilleri gibi. Her anahtar seçiliyken Edit Mode'da yalnızca ilgili noktaları hareket ettir. Sonra değer sürgüsünü sıfırdan bire kaydırarak ifadeyi açıp kapatabilirsin. Bu sürgülere keyframe vererek yüzünü canlandıracaksın.",
+  intro:[
+   "<b>Shape key</b>, aynı ağın farklı bir şeklinin kaydıdır. <b>Basis</b> modelin dinlenme halidir; diğer her anahtar Basis'ten ne kadar farklı olduğunu saklar. Değer 0 iken etkisizdir, 1 iken tam uygulanır; birkaç anahtar aynı anda karıştırılabilir (yarı gülümseme + şaşkın kaş gibi).",
+   "Standart bir anime yüz seti: <b>blink</b> (iki göz), <b>blink_L</b> ve <b>blink_R</b> (tek göz kırpma), <b>joy</b> (gülümseme), <b>angry</b>, <b>sorrow</b>, <b>surprised</b>, kaş yukarı ve aşağı, ve konuşma için <b>A, I, U, E, O</b> ağız şekilleri. VTuber ve VRM araçları da bu isimleri kullanır.",
+   "Animeye özgü abartılı ifadeler (> &lt; gözler, ter damlası, kızarma çizgileri) çoğu zaman ayrı küçük ağlar ya da doku değişimiyle yapılır ve shape key ile 0'dan 1'e ölçeklenerek görünür hale getirilir.",
+   "Animatörün işini kolaylaştırmak için shape key'leri <b>Driver</b> ile rig'deki kontrol kemiklerine bağlayabilirsin: sürgüye sağ tıklayıp Add Driver, kaynak olarak kemiğin konumunu seç."
+  ],
+  steps:[
+   "Kafa nesnesi seçiliyken Object Data Properties › Shape Keys › <b>+</b> (ilk eklenen Basis olur).",
+   "Tekrar <b>+</b> ile <b>blink</b> ekle, adını değiştir, Edit Mode'a gir ve üst göz kapağının noktalarını alt kapağa indir (Proportional Editing yardımcı olur).",
+   "Edit Mode'un sağ üstündeki <b>X</b> simetri düğmesi açıkken iki taraf birlikte değişir. Tek göz için blink'ten Vertex Group ile ayrılmış blink_L ve blink_R üret.",
+   "A, I, U, E, O ağız şekillerini yap: A geniş ve açık, I yatay ve dar, U küçük ve yuvarlak, E yarı açık geniş, O dikey yuvarlak.",
+   "Kaş anahtarlarını (yukarı, kızgın, üzgün) yap; kaşlar ayrı nesneyse onlara da aynı isimlerle shape key ekle.",
+   "Sürgüleri karıştırarak ifadeleri test et; birlikte kullanıldığında bozulan çiftleri düzelt.",
+   "Sürgünün üzerine gelip <kbd>I</kbd> ile keyframe ver."
+  ],
+  keys:[["I","Sürgüye keyframe ver"],["Alt+I","Keyframe sil"],["Sağ tık › Add Driver","Kemiğe bağla"],["Alt+Click","Değeri tüm seçililere uygula"],["Ctrl+Z","Geri al (Edit Mode'da da çalışır)"]],
+  tip:"Anahtar isimlerini İngilizce ve standart tutarsan (blink, joy, A, I, U, E, O) karakterini VRM, VTuber ve oyun motoru araçlarına aktarmak çok kolaylaşır.",
+  warn:"Basis anahtarı seçiliyken modeli düzenlemek ya da yeni nokta eklemek; tüm ifadeler kayar. Düzenlemeden önce hangi anahtarın aktif olduğuna mutlaka bak.",
+  check:"blink, joy, angry, surprised ve A İ U E O hazır"
+},
+{ id:"animasyon", mode:"anim", title:"Animasyon: keyframe ve 12 prensip",
+  narr:"Şimdi karakterimizi hareket ettirelim. Animasyon, belirli karelerde poz kaydetmek ve Blender'ın aradaki hareketi doldurmasıdır. Pose Mode'da bir poz ver, I tuşuyla keyframe ekle, zaman çizelgesinde ileri git, yeni poz ver ve tekrar keyframe ekle. Önce ana pozları kur; sonra aradaki geçiş pozlarını ekle; en son da Graph Editor'da eğrileri yumuşat. Anime hissini yakalamak için hareketi saniyede on iki poz gibi göstermek, yani on twos tekniği çok etkilidir; bunu Stepped Interpolation modifier'ı ile yapabilirsin. Unutma, iyi animasyon on iki animasyon prensibine dayanır; zamanlama, abartı, hazırlık hareketi ve takip hareketi bunların en önemlileridir.",
+  intro:[
+   "Blender'da her ayarlanabilir değer (konum, dönüş, shape key, renk) bir <b>keyframe</b> alabilir. İki keyframe arasındaki değerleri Blender hesaplar; bu hesaplamanın biçimini <b>Graph Editor</b>'daki eğriler belirler.",
+   "Profesyonel iş akışı üç aşamadır. <b>Blocking</b>: sadece ana pozlar, Constant geçişle; zamanlama burada oturur. <b>Spline</b>: geçişler yumuşatılır, ara pozlar (breakdown) eklenir. <b>Polish</b>: saç ve kıyafet gecikmeleri, göz kırpmaları, küçük detaylar.",
+   "Anime animasyonu genellikle saniyede 24 kare çekilir ama karakterler çoğu zaman her iki karede bir poz değiştirir; buna <b>on twos</b> denir. Bu hafif kesik hareket, 3D'yi el çizimine benzetir. Ayrıca uzun duraksamalar (hold), çok hızlı geçişler ve abartılı ara kareler (smear) animeye özgüdür.",
+   "<b>12 prensip</b>: Squash &amp; Stretch (ezilme ve uzama), Anticipation (hazırlık), Staging (sahneleme), Straight Ahead / Pose to Pose, Follow Through &amp; Overlapping (takip ve gecikme), Slow In / Slow Out (yavaş başla, yavaş bitir), Arcs (yaylar), Secondary Action (ikincil hareket), Timing (zamanlama), Exaggeration (abartı), Solid Drawing (hacim hissi), Appeal (çekicilik)."
+  ],
+  steps:[
+   "Output Properties › Frame Rate: <b>24 fps</b>; Frame Start ve End değerlerini sahnenin uzunluğuna göre ayarla.",
+   "Animation çalışma alanına geç; rig'i seçip Pose Mode'a gir.",
+   "Kare 1'de başlangıç pozunu ver, <kbd>A</kbd> ile tüm kemikleri seç ve <kbd>I</kbd> ile keyframe ekle.",
+   "Kare 12 ve 24'te yeni ana pozlar ver; Dope Sheet'te keyframe'leri <kbd>G</kbd> ile kaydırarak zamanlamayı ayarla.",
+   "Blocking bitince Graph Editor'da eğrileri düzenle; <kbd>T</kbd> ile geçiş türünü (Bezier, Linear, Constant) değiştir.",
+   "Anime görünümü için Graph Editor'da eğrileri seç, Sidebar (<kbd>N</kbd>) › Modifiers › Add Modifier › <b>Stepped Interpolation</b>, Step Size: 2.",
+   "Saç ve kıyafet kemiklerine ana hareketten 2–4 kare gecikmeli takip hareketi ver.",
+   "<kbd>Space</kbd> ile oynat; akıcı izlemek için View › Viewport Render Animation ile hızlı önizleme videosu al.",
+   "Yürüme döngüsü gibi tekrar eden hareketlerde ilk ve son pozu aynı yap, Graph Editor'da Cycles modifier'ı ekle."
+  ],
+  keys:[["I","Keyframe ekle"],["Alt+I","Keyframe sil"],["Space","Oynat / durdur"],["← / →","Bir kare geri / ileri"],["↑ / ↓","Önceki / sonraki keyframe"],["Shift+←","Başa dön"],["T","Geçiş türü"],["Ctrl+C / Ctrl+V","Pozu kopyala / yapıştır"],["Shift+Ctrl+V","Pozu ayna yapıştır"],["K","Keying set seç (Dope Sheet'te kanal ekle)"]],
+  tip:"Önce sadece ana pozlarla ve Constant geçişle çalış. Zamanlama doğru hissettirmeden yumuşatmaya geçme; kötü zamanlanmış bir hareket ne kadar cilalansa da iyi görünmez.",
+  warn:"Her kareye keyframe koymak. Az sayıda ama doğru yere konmuş keyframe hem daha akıcı hem de düzeltmesi çok daha kolay bir animasyon demektir.",
+  check:"10 saniyelik bir hareket: blocking, spline ve on twos denendi"
+},
+{ id:"ses", mode:"voice", title:"Seslendirme kaydı",
+  narr:"Karakterini konuşturmak için önce sesi kaydetmelisin. Sessiz bir odada, ağzından yaklaşık bir karış uzakta duran bir mikrofonla kayıt yap; yastıklar, perdeler ve battaniyeler yankıyı azaltır. Audacity gibi ücretsiz bir programda kaydedip gürültü azaltma uygula ve sesi normalleştir. Repliklerini önceden yaz, karakterin yaşına ve kişiliğine uygun bir ses tonu seç ve her repliği birkaç kez farklı duygularla oku. Dosyayı kırk sekiz kilohertz WAV olarak kaydet. Animasyon dünyasında genellikle önce ses kaydedilir, animasyon ona göre yapılır.",
+  intro:[
+   "Animede seslendirme sanatçısına <b>seiyū</b> denir ve ses, karakterin kişiliğinin yarısıdır. Önce sesi kaydetmenin sebebi, oyuncunun ritmini ve duygusunu serbestçe vermesi ve animatörün de hareketleri bu ritme göre kurmasıdır.",
+   "Ekipman: başlangıç için iyi bir USB mikrofon yeterlidir. Bir pop filtresi (patlamalı P ve B seslerini yumuşatır) ve kapalı kulaklık kullan. Ortam ekipmandan daha önemlidir: halı, perde, yatak, hatta elbise dolabının içi bile yankıyı ciddi ölçüde azaltır.",
+   "Seviye: konuşurken sesin en yüksek noktası −12 ile −6 dB arasında olmalı. Daha yüksek kayıt kırpılma (clipping) yapar ve düzeltilemez; düşük kayıt sonradan yükseltilebilir.",
+   "Anime oyunculuğu için: ünsüzleri net söyle, nefes ve kısa tepki seslerini (ha?, hm!, iç çekme) ayrı kaydet, duyguyu biraz abart. Seslendirmeyi kendin yapmayacaksan bir arkadaşından yardım alabilir ya da yapay zekâ ses araçlarını kullanabilirsin; o durumda aracın kullanım lisansını kontrol et."
+  ],
+  steps:[
+   "Senaryoyu ve her sahnenin replik listesini yaz; her replik için duygu notu ekle (heyecanlı, utangaç, kızgın…).",
+   "Kayıt ortamını hazırla; mikrofonu ağızdan 15–20 cm uzağa, hafif yandan konumlandır.",
+   "Audacity'de proje hızını <b>48000 Hz</b> yap, kayıt seviyesini ayarla.",
+   "Kaydın başında 3 saniye sessiz kal (gürültü örneği), sonra her repliği en az üç kez farklı tonlarda oku.",
+   "Sessiz bölümü seç › Effect › Noise Removal and Repair › <b>Noise Reduction</b> › Get Noise Profile; sonra tümünü seçip yaklaşık 12 dB azaltma uygula.",
+   "Effect › <b>Normalize</b> (−1 dB); gerekirse hafif bir Compressor ve 80 Hz High-Pass Filter.",
+   "En iyi tekrarları ayır, her repliği ayrı dosya olarak dışa aktar: File › Export Audio › WAV, 48 kHz. Dosyaları sahne01_replik03.wav gibi adlandır."
+  ],
+  keys:[["R","Kaydı başlat (Audacity)"],["Space","Oynat / durdur"],["Ctrl+Shift+E","Sesi dışa aktar"],["Ctrl+I","Seçimden böl"],["Ctrl+B","Etiket ekle"],["Ctrl+Z","Geri al"]],
+  tip:"Kayıttan önce 5 dakika ses ısınması yap (dudak titretme, mmm mırıldanma, tekerleme). Su iç, süt ürünlerinden kaçın; ağız sesleri azalır.",
+  warn:"Sesi çok yüksek kaydedip kırpılmaya neden olmak. Kırpılmış ses cızırtılı duyulur ve hiçbir efektle tam düzelmez.",
+  check:"Replikler 48 kHz WAV olarak temizlenmiş ve adlandırılmış"
+},
+{ id:"lipsync", mode:"lip", title:"Lip sync: dudak senkronu",
+  narr:"Ses hazır, şimdi dudakları ona uyduralım. Ses dosyasını Blender'ın Video Sequencer'ına ekle ve Playback menüsünden scrubbing'i aç; böylece kareleri gezerken sesi duyarsın. Senkron modunu Sync to Audio yap ki oynatma sesle aynı hızda kalsın. Anime dudak senkronu aslında oldukça basittir: genelde kapalı, yarı açık ve açık ağız ile A, İ, U, E, O sesli harfleri yeterlidir. Her heceyi dinle, sesli harfe uyan shape key'i bir ile, diğerlerini sıfır ile keyframe'le. Ağzı sesten bir iki kare önce açmak izleyicinin gözünde daha doğal görünür. Daha hızlı çalışmak istersen Rhubarb Lip Sync gibi araçlar sesten otomatik ağız şekli üretebilir.",
+  intro:[
+   "Japon animasyonunda dudak senkronu bilerek sade tutulur: çoğu sahnede yalnızca üç ağız şekli (kapalı, yarı açık, açık) kullanılır. 3D'de shape key'lerle biraz daha ileri gidip beş sesli harf şeklini kullanmak, hem doğal hem de anime ruhuna uygun bir sonuç verir.",
+   "Türkçe için eşleştirme kolaydır: <b>a → A</b>, <b>e → E</b>, <b>ı, i → I</b>, <b>o, ö → O</b>, <b>u, ü → U</b>. <b>m, b, p</b> seslerinde dudaklar kapanmalı; diğer ünsüzlerde ağız bir önceki ya da sonraki sesli harfe göre yarı açık kalabilir.",
+   "Konuşma sadece ağız değildir: vurgulu kelimelerde kaş kalkar, cümle sonlarında göz kırpılır, kafa hafifçe sallanır. Bu küçük hareketler dudak senkronundaki ufak hataları da gizler."
+  ],
+  steps:[
+   "Bir paneli <b>Video Sequencer</b>'a çevir; <kbd>Shift</kbd>+<kbd>A</kbd> › Sound ile replik dosyasını ekle ve kare 1'e hizala.",
+   "Timeline'da Playback menüsü › <b>Scrubbing</b>'i aç; Sync ayarını <b>Sync to Audio</b> yap.",
+   "Sesi kare kare dinle (<kbd>←</kbd> / <kbd>→</kbd> ya da <kbd>Alt</kbd>+tekerlek); her belirgin hecede Timeline'a <kbd>M</kbd> ile marker koy ve <kbd>F2</kbd> ile harfi yaz.",
+   "Her marker'da ilgili shape key'i 1, diğer ağız anahtarlarını 0 yapıp <kbd>I</kbd> ile keyframe ver. Ağız açılışını sesten 1–2 kare önceye çek.",
+   "Kelime aralarında ve m, b, p seslerinde ağzı kapat; uzun sesli harflerde açık tut.",
+   "Cümle aralarına göz kırpma, vurgulu kelimelere kaş ve kafa hareketi ekle.",
+   "Otomatik yol: Rhubarb Lip Sync ve Blender eklentisi, sesten ağız şekli keyframe'leri üretir; sonuçları elle temizle."
+  ],
+  keys:[["M","Marker ekle"],["F2","Marker'ı yeniden adlandır"],["Alt+Tekerlek","Kareleri kaydır"],["Shift+A","Sequencer'a ses ekle"],["↑ / ↓","Keyframe'ler arasında atla"],["Ctrl+B","Önizleme aralığı çiz (Timeline)"]],
+  tip:"Senkronu kontrol ederken Viewport'ta canlı oynatmaya güvenme; bilgisayar kare atlarsa senkron yanlış görünür. View › Viewport Render Animation ile hızlı bir video al ve onu izle.",
+  warn:"Her harfe ağız şekli koymak. Bu 'titreyen ağız' görüntüsü verir. Sadece belirgin heceleri işaretlemek, animede çok daha temiz görünür.",
+  check:"Bir replik dudak senkronlu ve göz kırpmalı"
+},
+{ id:"render", mode:"render", title:"Işık, kamera ve render",
+  narr:"Animasyon tamamlandığında sahneyi sinematik hale getirelim. Toon shading için genellikle tek bir Sun ışığı yeterlidir; çünkü gölgenin yönünü bu ışık belirler. Karakterin arkasından gelen ince bir kenar ışığı onu arka plandan ayırır. Kamerayı yerleştirmek için iyi bir açıdan bakarken Kontrol Alt Numpad Sıfır'a bas; kamera o açıya geçer. Anime sahnelerinde otuz beş ile seksen beş milimetre arası odak uzunlukları ve göz hizasından açılar sık kullanılır. Render ayarlarında çözünürlüğü bin dokuz yüz yirmiye bin seksen, kare hızını yirmi dört yap ve çıktıyı önce PNG kare dizisi olarak al. Böylece render yarıda kesilirse kaldığın yerden devam edebilirsin.",
+  intro:[
+   "Toon shading'de ışık, gölgenin <b>şeklini</b> belirler; o yüzden çok sayıda ışık yerine iyi yönlendirilmiş tek bir <b>Sun</b> ışığı kullanılır. Yüzde gölge çizgisinin nerede durduğunu, ışığın açısını değiştirerek tasarlarsın.",
+   "<b>Color Management</b> çok önemlidir: Blender varsayılan olarak gerçekçi render için AgX görünümünü kullanır ve bu toon renklerini soldurur. Render Properties › Color Management › View Transform: <b>Standard</b> yap.",
+   "<b>Kamera</b> dili: yakın plan (duygu), orta plan (konuşma), geniş plan (mekân). Anime sahnelerinde göz hizası, hafif alt açı (güç, kararlılık) ve hafif üst açı (kırılganlık) sık kullanılır. Kameraya küçük bir sarsıntı ve hızlı yakınlaşmalar aksiyonda dinamizm katar.",
+   "Arka plan için iki yol var: boyanmış 2D bir resmi kameranın arkasına bir düzlemle yerleştirmek (klasik anime yöntemi) ya da arka planı da 3D modelleyip aynı toon shader'ı kullanmak."
+  ],
+  steps:[
+   "Render Engine: <b>EEVEE</b>; Color Management › View Transform: <b>Standard</b>.",
+   "<kbd>Shift</kbd>+<kbd>A</kbd> › Light › <b>Sun</b>; Strength 3–5. Işığı döndürerek yüzdeki gölge çizgisini güzel bir yere oturt.",
+   "Kenar ışığı için shader'daki Layer Weight zincirini ya da arkaya ikinci bir ışık kullan.",
+   "World rengini açık gökyüzü tonuna ayarla ya da arkaya bir arka plan resmi koy.",
+   "Kamera: istediğin açıdan bakarken <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>Numpad 0</kbd>; ince ayar için <kbd>N</kbd> › View › <b>Lock Camera to View</b>. Focal Length 35–85 mm.",
+   "Output Properties: 1920 × 1080, %100, 24 fps; File Format <b>PNG</b>; çıktı klasörü //render/.",
+   "Parlama ve renk için Compositing çalışma alanında Glare (Fog Glow ya da Bloom) ve Color Balance düğümleri ekle.",
+   "<kbd>F12</kbd> ile tek kareyi test et, her şey yerindeyse <kbd>Ctrl</kbd>+<kbd>F12</kbd> ile animasyonu render et."
+  ],
+  keys:[["F12","Tek kare render"],["Ctrl+F12","Animasyonu render et"],["Numpad 0","Kamera görünümü"],["Ctrl+Alt+Numpad 0","Kamerayı görünüme hizala"],["Ctrl+B","Render bölgesi (kamera görünümünde)"],["F11","Render penceresini göster"],["Z","Rendered görünüm"]],
+  tip:"View Transform'u Standard yapmak toon renklerinin solmasını önler. Rengini seçtiğin cilt tonu render'da tam olarak o renk çıkar.",
+  warn:"Doğrudan MP4 olarak render almak. Çökme ya da elektrik kesintisinde tüm render boşa gider; PNG dizisi al, sonra birleştir.",
+  check:"Işık, kamera ve PNG kare dizisi render'ı hazır"
+},
+{ id:"final", mode:"final", title:"Kurgu, ses miksajı ve dışa aktarma",
+  narr:"Son adımda tüm parçaları birleştiriyoruz. Video Editing çalışma alanını aç, render ettiğin PNG kare dizisini ve ses kaydını Sequencer'a ekle. Müzik ve ses efektlerini ayrı kanallara koy, konuşma sesini müziğin üzerinde net duyulacak şekilde ayarla. İstersen Compositor'da parlama, renk düzeltmesi ve hafif bir bulanıklık ekleyerek anime filmlerindeki o yumuşak ışıltıyı yakala. Son olarak çıktı formatını FFmpeg Video, kapsayıcıyı MPEG 4, codec'i H 264, ses codec'ini AAC yap ve Kontrol F12 ile videonu oluştur. Tebrikler, artık kendi konuşan anime karakterine sahipsin!",
+  intro:[
+   "Blender'ın <b>Video Sequencer</b>'ı basit kurgu için yeterlidir: kare dizileri, sesler, yazılar ve geçişler katmanlar halinde dizilir. Üstteki kanal alttakinin önünde görünür.",
+   "<b>Ses dengesi</b>: konuşma her zaman öndedir. Konuşmanın tepe seviyesi yaklaşık −6 dB, müzik ise konuşma sırasında konuşmadan 10–15 dB daha düşük olmalı (buna ducking denir). Sound strip'in Volume değerine keyframe vererek müziği konuşma anlarında kısabilirsin.",
+   "Son dokunuşlar: başlık ve jenerik yazıları, sahne geçişlerinde kısa kararmalar, gerekiyorsa altyazı. Videoyu yayınlamadan önce mutlaka telefonda ve kulaklıkla izle."
+  ],
+  steps:[
+   "Yeni bir Blender dosyası aç ya da aynı dosyada <b>Video Editing</b> çalışma alanına geç.",
+   "<kbd>Shift</kbd>+<kbd>A</kbd> › Image/Sequence: render klasöründeki tüm PNG'leri seç (<kbd>A</kbd>) ve ekle.",
+   "<kbd>Shift</kbd>+<kbd>A</kbd> › Sound ile replikleri, müziği ve efektleri ayrı kanallara ekle; senkronu kontrol et.",
+   "Strip › Volume değerlerini ayarla; müziği konuşma anlarında keyframe'lerle kıs.",
+   "Altyazı ya da başlık için <kbd>Shift</kbd>+<kbd>A</kbd> › Text ekle.",
+   "Output Properties › File Format: <b>FFmpeg Video</b>; Container: <b>MPEG-4</b>; Video Codec: <b>H.264</b>; Output Quality: High; Audio Codec: <b>AAC</b>, 192 kb/s.",
+   "<kbd>Ctrl</kbd>+<kbd>F12</kbd> ile videoyu oluştur ve baştan sona izle."
+  ],
+  keys:[["Shift+A","Strip ekle"],["K","Strip'i böl"],["Shift+D","Strip kopyala"],["Home","Tümünü göster"],["Ctrl+F12","Videoyu oluştur"],["Ctrl+G","Strip'leri grupla (meta)"]],
+  tip:"Kısa bir ilk proje seç: 10–15 saniyelik, tek replikli bir selamlaşma sahnesi. Tamamlanmış küçük bir iş, yarım kalmış büyük bir projeden çok daha fazlasını öğretir.",
+  warn:"Output › Audio Codec'i 'No Audio' bırakmak. Video sessiz çıkar; render'dan önce ses ayarlarını mutlaka kontrol et.",
+  check:"Sesli MP4 video dışa aktarıldı ve izlendi"
+}
+];
+
+const WEEKS = [
+ ["1. hafta","Arayüz, gezinme ve kısayollar. Basit nesnelerle (bardak, masa, sandalye) 5–10 küçük model."],
+ ["2. hafta","Karakter tasarımı ve model sheet. Kafa modellemeyi en az üç kez sıfırdan dene, en iyisini seç."],
+ ["3. hafta","Vücut, eller, saç tutamları ve kıyafet."],
+ ["4. hafta","UV açma, göz dokusu, toon shading ve kontur çizgileri."],
+ ["5. hafta","Rigify ile iskelet, weight paint düzeltmeleri, poz testleri."],
+ ["6. hafta","Shape key ifadeleri; göz kırpma, el sallama ve yürüme döngüsü animasyonları."],
+ ["7. hafta","Seslendirme kaydı ve 10 saniyelik konuşma sahnesinde lip sync."],
+ ["8. hafta","Işık, kamera, render, kurgu ve ilk videonu yayınlama."]
+];
+const RES = [
+ ["Blender indir","https://www.blender.org/download/","resmi ve ücretsiz"],
+ ["Blender Kullanım Kılavuzu","https://docs.blender.org/manual/en/latest/","her menünün açıklaması"],
+ ["Krita","https://krita.org/","model sheet ve doku çizimi için ücretsiz çizim programı"],
+ ["Audacity","https://www.audacityteam.org/","ücretsiz ses kaydı ve düzenleme"],
+ ["Rhubarb Lip Sync","https://github.com/DanielSWolf/rhubarb-lip-sync","sesten otomatik ağız şekli"],
+ ["Mixamo","https://www.mixamo.com/","otomatik rig ve hazır vücut animasyonları"],
+ ["VRoid Studio","https://vroid.com/en/studio","hazır anime karakter tabanı; Blender'a aktarılıp incelenebilir"]
+];
+
+/* =================== DOM KURULUMU =================== */
+const $ = s => document.querySelector(s);
+const stage = $("#stage"), chaptersEl = $("#chapters"), toc = $("#toc"), dotsEl = $("#dots");
+const pad = n => String(n).padStart(2,"0");
+const kbdify = k => k.split(/(\+| \/ )/).map(p => (p === "+" || p === " / ") ? (p === "+" ? "+" : " / ") : "<kbd>"+p+"</kbd>").join("");
+const LS = (k, v) => { try { if (v === undefined) return localStorage.getItem(k); localStorage.setItem(k, v); } catch(e) { return null; } };
+
+let totalChars = 0, keyCount = 0;
+CH.forEach((c,i) => {
+  totalChars += c.narr.length; keyCount += c.keys.length;
+  const li = document.createElement("li");
+  li.innerHTML = '<a href="#'+c.id+'" data-i="'+i+'">'+pad(i+1)+' · '+c.title.split(":")[0]+'</a>';
+  toc.appendChild(li);
+  const d = document.createElement("button"); d.type="button"; d.title = (i+1)+". "+c.title; d.setAttribute("aria-label", (i+1)+". bölüm: "+c.title); d.dataset.i=i; dotsEl.appendChild(d);
+  const s = document.createElement("section");
+  s.className = "chap"; s.id = c.id; s.dataset.i = i;
+  s.innerHTML =
+    '<div class="chap-head"><div><p class="chap-num">Bölüm '+pad(i+1)+' / '+CH.length+' · <span class="mode">'+MODES_LABEL(c.mode)+'</span></p><h2>'+c.title+'</h2></div>'+
+    '<button class="btn listen" type="button" data-listen="'+i+'"><svg viewBox="0 0 16 16"><path d="M4 2l10 6-10 6z"/></svg>Bu bölümü dinle</button></div>'+
+    c.intro.map(p => "<p>"+p+"</p>").join("")+
+    '<h3>Adım adım</h3><ol class="steps">'+c.steps.map(x => "<li>"+x+"</li>").join("")+'</ol>'+
+    '<h3>Kısayollar</h3><ul class="keys">'+c.keys.map(k => '<li><span class="kk">'+kbdify(k[0])+'</span><span>'+k[1]+'</span></li>').join("")+'</ul>'+
+    '<div class="callouts"><div class="call tip"><b>İpucu</b>'+c.tip+'</div><div class="call warn"><b>Sık yapılan hata</b>'+c.warn+'</div></div>';
+  chaptersEl.appendChild(s);
+});
+function MODES_LABEL(m){ return ""; }
+
+// ek bölümler
+const roadmap = document.createElement("section");
+roadmap.className = "extra"; roadmap.id = "yol-haritasi";
+roadmap.innerHTML = '<h2>8 haftalık çalışma planı</h2><p>Günde 1–2 saat ayırabilirsen bu tempo gerçekçidir. Bir haftayı bitiremezsen sorun değil; sırayı korumak hızdan daha önemlidir.</p><ul class="weeks">'+WEEKS.map(w => '<li><b>'+w[0]+'</b>'+w[1]+'</li>').join("")+'</ul>';
+chaptersEl.appendChild(roadmap);
+const checks = document.createElement("section");
+checks.className = "extra"; checks.id = "kontrol";
+checks.innerHTML = '<h2>Kontrol listesi</h2><p class="cnt" id="checkCnt"></p><ul class="check">'+CH.map((c,i) => '<li><label><input type="checkbox" id="chk-'+c.id+'" data-k="'+c.id+'"><span><b>'+pad(i+1)+'</b> · '+c.check+'</span></label></li>').join("")+'</ul><p style="font-size:13px;color:var(--muted);margin:0">İşaretlerin yalnızca bu tarayıcıda saklanır.</p>';
+chaptersEl.appendChild(checks);
+const res = document.createElement("section");
+res.className = "extra"; res.id = "kaynaklar";
+res.innerHTML = '<h2>Faydalı araçlar ve kaynaklar</h2><ul class="res">'+RES.map(r => '<li><a href="'+r[1]+'" target="_blank" rel="noopener">'+r[0]+'</a>: '+r[2]+'</li>').join("")+'</ul>';
+chaptersEl.appendChild(res);
+
+function updCheck(){
+  const all = checks.querySelectorAll("input"); let n = 0;
+  all.forEach(x => { if (x.checked) n++; });
+  $("#checkCnt").textContent = n+" / "+all.length+" tamamlandı";
+}
+checks.querySelectorAll("input").forEach(x => {
+  x.checked = LS("anime-chk-"+x.dataset.k) === "1";
+  x.addEventListener("change", () => { LS("anime-chk-"+x.dataset.k, x.checked ? "1" : "0"); updCheck(); });
+});
+updCheck();
+
+const minutes = Math.round(totalChars / 14 / 60);
+$("#meta").innerHTML = '<span><b>'+CH.length+'</b> bölüm</span><span>yaklaşık <b>'+minutes+' dk</b> sesli anlatım</span><span><b>'+keyCount+'</b> kısayol</span><span>Blender <b>4.x / 5.x</b></span>';
+
+/* =================== SAHNE =================== */
+var MODES = {
+  cube:   {cls:"hide-char show-cube", ed:"3D Viewport", bm:"Object Mode", tl:"ruler"},
+  ref:    {cls:"look-sketch show-guides", ed:"3D Viewport", bm:"Front Ortho · Reference", tl:"ruler"},
+  wire:   {cls:"look-wire show-wire", ed:"3D Viewport", bm:"Edit Mode · Mirror", tl:"ruler"},
+  hair:   {cls:"look-wire look-hairsel show-wire", ed:"3D Viewport", bm:"Edit Mode · Saç seçili", tl:"ruler"},
+  uv:     {cls:"look-uv show-uv blink", ed:"UV Editing", bm:"Edit Mode · UV Grid", tl:"ruler"},
+  toon:   {cls:"shaded blink", ed:"Shader Editor", bm:"Material Preview · EEVEE", tl:"ruler"},
+  outline:{cls:"shaded blink outline", ed:"3D Viewport", bm:"Solidify · Inverted Hull", tl:"ruler"},
+  rig:    {cls:"look-weight show-bones tilt-smooth", ed:"3D Viewport", bm:"Weight Paint · Pose Mode", tl:"keys"},
+  face:   {cls:"shaded outline", ed:"3D Viewport", bm:"Shape Keys", tl:"keys"},
+  anim:   {cls:"shaded outline blink tilt-step", ed:"Dope Sheet", bm:"Pose Mode · on twos", tl:"keys"},
+  voice:  {cls:"shaded outline blink show-mic", ed:"Audacity", bm:"Kayıt · 48 kHz WAV", tl:"wave"},
+  lip:    {cls:"shaded outline blink", ed:"Sequencer", bm:"Lip Sync · A I U E O", tl:"wave"},
+  render: {cls:"shaded outline blink show-scene show-cam show-rim hide-grid", ed:"Camera View", bm:"Rendered · EEVEE", tl:"ruler"},
+  final:  {cls:"shaded outline blink show-scene show-rim show-spark hide-grid tilt-slow", ed:"Video Editing", bm:"FFmpeg · H.264 · AAC", tl:"seq"}
+};
+// bölüm etiketlerini MODES tanımlandıktan sonra doldur
+document.querySelectorAll(".chap .mode").forEach((el,i) => { el.textContent = MODES[CH[i].mode].bm; });
+
+// sağ göz
+const eyeL = $("#eyeWrapL");
+const eyeR = eyeL.cloneNode(true); eyeR.id = "eyeWrapR";
+const eyeRW = document.createElementNS("http://www.w3.org/2000/svg","g");
+eyeRW.setAttribute("transform","translate(400 0) scale(-1 1)"); eyeRW.appendChild(eyeR);
+eyeL.parentNode.insertBefore(eyeRW, eyeL.nextSibling);
+
+const NS = "http://www.w3.org/2000/svg";
+function el(tag, attrs, parent){ const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; }
+
+// tel kafes çizgileri
+const wire = $("#wire");
+[118,140,162,186,232,250,272,290].forEach(y => el("path",{d:"M110 "+y+" Q200 "+(y+10)+" 290 "+y},wire));
+[150,174,200,226,250].forEach(x => el("path",{d:"M"+x+" 90 Q"+(x+(x-200)*.25)+" 200 "+(200+(x-200)*.5)+" 300"},wire));
+[[168,209],[232,209]].forEach(p => { el("ellipse",{cx:p[0],cy:p[1],rx:26,ry:23},wire); el("ellipse",{cx:p[0],cy:p[1],rx:35,ry:31},wire); });
+el("ellipse",{cx:200,cy:259,rx:18,ry:9},wire); el("ellipse",{cx:200,cy:259,rx:30,ry:16},wire);
+[[168,209],[232,209]].forEach(p => { for (let a=0;a<12;a++){ const t=a/12*Math.PI*2; el("circle",{cx:p[0]+Math.cos(t)*26,cy:p[1]+Math.sin(t)*23,r:1.8,fill:"#111",stroke:"none"},wire);} });
+for (let a=0;a<10;a++){ const t=a/10*Math.PI*2; el("circle",{cx:200+Math.cos(t)*18,cy:259+Math.sin(t)*9,r:1.8,fill:"#111",stroke:"none"},wire); }
+
+// kemikler
+function bone(parent, x1,y1,x2,y2,w,active){
+  const dx=x2-x1, dy=y2-y1, L=Math.hypot(dx,dy), ux=dx/L, uy=dy/L, px=-uy*w, py=ux*w;
+  const mx=x1+dx*.12, my=y1+dy*.12;
+  const fill = active ? "#5aa9e6" : "#c8c8c8";
+  el("polygon",{points:[x1,y1, mx+px,my+py, x2,y2, mx-px,my-py].join(" "), fill, "fill-opacity":".85", stroke:"#111", "stroke-width":"1.2"}, parent);
+  el("circle",{cx:x1,cy:y1,r:3.2,fill,stroke:"#111","stroke-width":"1"},parent);
+  el("circle",{cx:x2,cy:y2,r:2.4,fill,stroke:"#111","stroke-width":"1"},parent);
+}
+const bb = $("#bonesBody"), bh = $("#bonesHead");
+bone(bb,200,398,200,342,9); bone(bb,196,342,150,352,6); bone(bb,204,342,250,352,6);
+bone(bb,150,352,124,400,7); bone(bb,250,352,276,400,7); bone(bb,200,342,200,300,6);
+bone(bh,200,300,200,112,14,true); bone(bh,200,238,200,288,5); bone(bh,140,168,124,262,5); bone(bh,260,168,276,262,5);
+bone(bh,168,209,168,190,4); bone(bh,232,209,232,190,4);
+
+/* ifade ve ağız */
+const mouthO = $("#mouthO"), mouthLine = $("#mouthLine");
+const MOUTH = {A:[8.5,8.5], I:[10,3.2], U:[4.5,4.5], E:[9,5.2], O:[6.5,8], smile:[10,6], small:[5,2]};
+let exprMouth = null;
+function setMouth(v){
+  const m = MOUTH[v];
+  if (!m){ mouthO.setAttribute("rx",0); mouthO.setAttribute("ry",0); mouthLine.style.display=""; return; }
+  mouthO.setAttribute("rx",m[0]); mouthO.setAttribute("ry",m[1]); mouthLine.style.display="none";
+}
+const eyeXs = () => stage.querySelectorAll(".eyeX");
+function setExpr(name){
+  const happy = name === "joy";
+  $("#eyesHappy").style.display = happy ? "inline" : "";
+  eyeXs().forEach(e => {
+    e.style.opacity = happy ? "0" : "1";
+    e.style.transform = name === "blink" ? "scaleY(.08)" : name === "surprised" ? "scale(1.08)" : name === "angry" ? "scaleY(.82)" : "";
+  });
+  stage.querySelectorAll(".pupil").forEach(p => p.style.transform = name === "surprised" ? "scale(.6)" : "");
+  const bl = $("#browL"), br = $("#browR");
+  const t = {joy:["translateY(-4px)","translateY(-4px)"], surprised:["translateY(-8px)","translateY(-8px)"], angry:["translateY(3px) rotate(16deg)","translateY(3px) rotate(-16deg)"]}[name] || ["",""];
+  bl.style.transform = t[0]; br.style.transform = t[1];
+  exprMouth = {joy:"smile", surprised:"O", angry:"small"}[name] || null;
+  if (!speaking) setMouth(exprMouth);
+}
+
+/* shape key paneli */
+const SK = [["blink","blink"],["joy","joy"],["surprised","surprised"],["angry","angry"]];
+$("#skRows").innerHTML = '<div class="sk-row"><span>Basis</span><span></span><span class="v"></span></div>' + SK.map(s => '<div class="sk-row" data-k="'+s[0]+'"><span>'+s[1]+'</span><span class="sk-bar"><i></i></span><span class="v">0.00</span></div>').join("");
+function setSK(name){
+  document.querySelectorAll("#skRows .sk-row[data-k]").forEach(r => {
+    const on = r.dataset.k === name;
+    r.querySelector("i").style.width = on ? "100%" : "0";
+    r.querySelector(".v").textContent = on ? "1.00" : "0.00";
+  });
+}
+
+/* mod değişimi */
+let curMode = null, modeTimer = null, modeStep = 0;
+const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+function applyMode(m){
+  if (m === curMode) return;
+  curMode = m;
+  const cfg = MODES[m];
+  stage.setAttribute("class", "st " + cfg.cls);
+  $("#vpEd").textContent = cfg.ed; $("#vpBm").textContent = cfg.bm;
+  $("#skPanel").hidden = m !== "face";
+  $("#lipBadge").hidden = m !== "lip";
+  clearInterval(modeTimer); modeStep = 0;
+  setExpr("neutral"); setSK(null);
+  if (m === "face"){
+    const seq = ["neutral","blink","joy","surprised","angry"];
+    const tick = () => { const n = seq[modeStep++ % seq.length]; setExpr(n); setSK(n); };
+    tick(); if (!reduce) modeTimer = setInterval(tick, 1500);
+  } else if (m === "lip"){
+    const seq = ["A","I","U","E","O","-"];
+    const tick = () => { const v = seq[modeStep++ % seq.length]; $("#lipLetter").textContent = v === "-" ? "kapalı" : v; if (!speaking) setMouth(v === "-" ? null : v); };
+    tick(); if (!reduce) modeTimer = setInterval(tick, 520);
+  }
+}
+
+/* =================== ZAMAN ÇİZELGESİ (canvas) =================== */
+const tl = $("#tl"), tctx = tl.getContext("2d");
+const wave = Array.from({length:240}, (_,i) => { const env = Math.max(0, Math.sin(i/240*Math.PI*5.3)) * .8 + .1; return env * (0.4 + Math.random()*0.6); });
+function drawTL(time){
+  const dpr = window.devicePixelRatio || 1, W = tl.clientWidth, H = tl.clientHeight;
+  if (tl.width !== Math.round(W*dpr)){ tl.width = Math.round(W*dpr); tl.height = Math.round(H*dpr); }
+  const c = tctx; c.setTransform(dpr,0,0,dpr,0,0);
+  c.fillStyle = "#262626"; c.fillRect(0,0,W,H);
+  c.fillStyle = "#1f1f1f"; c.fillRect(0,0,W,16);
+  const F = 48, x0 = 10, x1 = W-18, fx = f => x0 + (f-1)/(F-1)*(x1-x0);
+  c.font = "10px JetBrains Mono, monospace"; c.textBaseline = "middle";
+  for (let f=1; f<=F; f++){
+    const x = fx(f); const major = (f===1 || f%12===0);
+    c.fillStyle = major ? "#5a5a5a" : "#353535"; c.fillRect(Math.round(x), major?16:22, 1, H-(major?16:22));
+    if (major){ c.fillStyle = "#9a9a9a"; c.fillText(String(f), x+3, 8); }
+  }
+  const mode = MODES[curMode] ? MODES[curMode].tl : "ruler";
+  const animated = mode !== "ruler" && !reduce;
+  const frame = animated ? Math.floor(time/1000*24) % F + 1 : 1;
+  if (mode === "keys"){
+    const keys = [1,7,13,19,25,31,37,43,48]; const y = 40;
+    keys.forEach((k,i) => { const x = fx(k); c.save(); c.translate(x,y); c.rotate(Math.PI/4); c.fillStyle = (i%3===0) ? "#ffa033" : "#e2e2e2"; c.fillRect(-4,-4,8,8); c.strokeStyle="#111"; c.lineWidth=1; c.strokeRect(-4,-4,8,8); c.restore(); });
+    c.fillStyle = "#8a8a8a"; c.fillText(curMode === "face" ? "Key › shape keys" : "Summary", x0, 56);
+  } else if (mode === "wave"){
+    const top = 22, h = H-28, mid = top + h/2;
+    c.fillStyle = "#2f5f57"; c.fillRect(x0, top, x1-x0, h);
+    c.fillStyle = "#8fe0cf";
+    for (let i=0;i<wave.length;i++){ const x = x0 + i/wave.length*(x1-x0); const a = wave[i]*h*.45; c.fillRect(x, mid-a, Math.max(1,(x1-x0)/wave.length-0.6), a*2); }
+    if (curMode === "lip"){ ["A","I","U","E","O"].forEach((v,i) => { const x = fx(4+i*9); c.fillStyle="#ffa033"; c.beginPath(); c.moveTo(x-4,H); c.lineTo(x+4,H); c.lineTo(x,H-6); c.fill(); c.fillStyle="#fff"; c.fillText(v, x+5, H-6); }); }
+    else { c.fillStyle = "#cfeee6"; c.fillText("replik_01.wav", x0+4, top+8); }
+  } else if (mode === "seq"){
+    const rows = [["render_####.png","#6f5aa8",1,48,20],["replik_01.wav","#2f8f7a",4,40,34],["muzik.wav","#2c6f8f",1,48,48]];
+    rows.forEach(r => { c.fillStyle = r[1]; c.fillRect(fx(r[2]), r[4], fx(r[3])-fx(r[2]), 12); c.fillStyle = "#f2f2f2"; c.fillText(r[0], fx(r[2])+4, r[4]+6.5); });
+  } else {
+    c.fillStyle = "#6a6a6a"; c.fillText("Timeline", x0, 40);
+  }
+  const px = fx(frame);
+  c.fillStyle = "#4772b3"; c.fillRect(px-0.75, 0, 1.5, H);
+  c.fillRect(px-13, 1, 26, 14); c.fillStyle = "#fff"; c.textAlign = "center"; c.fillText(String(frame), px, 8); c.textAlign = "left";
+}
+let lastDraw = 0;
+function loop(t){ if (t - lastDraw > 33){ drawTL(t); lastDraw = t; } requestAnimationFrame(loop); }
+
+/* =================== ANLATIM / OYNATICI =================== */
+const synth = ("speechSynthesis" in window) ? window.speechSynthesis : null;
+const voiceSel = $("#voiceSel"), voiceNote = $("#voiceNote");
+let voices = [], cur = 0, playing = false, speaking = false, sentIdx = 0, token = 0, flapTimer = null, fallbackTimer = null;
+const sentencesOf = c => c.narr.match(/[^.!?]+[.!?]+/g).map(s => s.trim());
+
+function loadVoices(){
+  if (!synth){ voiceSel.innerHTML = '<option value="mute">Sessiz (yalnızca altyazı)</option>'; voiceNote.textContent = "Bu tarayıcı sesli anlatımı desteklemiyor; anlatım altyazı olarak ilerler."; voiceNote.className = "note warn"; return; }
+  voices = synth.getVoices();
+  const tr = voices.filter(v => /^tr/i.test(v.lang));
+  const prev = voiceSel.value;
+  let html = tr.map(v => '<option value="'+voices.indexOf(v)+'">'+v.name+' ('+v.lang+')</option>').join("");
+  html += '<option value="">Tarayıcının varsayılan sesi</option><option value="mute">Sessiz (yalnızca altyazı)</option>';
+  voiceSel.innerHTML = html;
+  if (prev && voiceSel.querySelector('option[value="'+prev+'"]')) voiceSel.value = prev;
+  if (tr.length){ voiceNote.textContent = "Türkçe ses bulundu: anlatım "+tr[0].name+" ile okunacak."; voiceNote.className = "note"; }
+  else if (voices.length){ voiceNote.textContent = "Bu cihazda Türkçe ses bulunamadı. Varsayılan ses Türkçeyi bozuk okuyabilir; istersen 'Sessiz' seçip altyazıyla izle ya da işletim sisteminin ayarlarından Türkçe ses paketi ekle."; voiceNote.className = "note warn"; }
+}
+if (synth){ loadVoices(); synth.addEventListener ? synth.addEventListener("voiceschanged", loadVoices) : (synth.onvoiceschanged = loadVoices); }
+else loadVoices();
+
+const rateIn = $("#rateIn");
+rateIn.addEventListener("input", () => { $("#rateVal").textContent = Number(rateIn.value).toFixed(2).replace(/0$/,"")+"×"; });
+
+function startFlap(){
+  speaking = true; clearInterval(flapTimer);
+  if (reduce){ setMouth("E"); return; }
+  const seq = ["A","E","I","O","U",null,"A","E",null];
+  flapTimer = setInterval(() => setMouth(seq[Math.floor(Math.random()*seq.length)]), 115);
+}
+function stopFlap(){ speaking = false; clearInterval(flapTimer); setMouth(exprMouth); }
+
+function showSentence(){
+  const s = sentencesOf(CH[cur]);
+  $("#capText").textContent = s[sentIdx] || s[0];
+  $("#capPos").textContent = "Bölüm "+(cur+1)+" · cümle "+(Math.min(sentIdx, s.length-1)+1)+" / "+s.length;
+  $("#capBar").style.width = ((Math.min(sentIdx+1, s.length))/s.length*100)+"%";
+}
+
+function setChapter(i, opts){
+  opts = opts || {};
+  cur = Math.max(0, Math.min(CH.length-1, i));
+  applyMode(CH[cur].mode);
+  $("#vpNo").textContent = pad(cur+1)+" / "+CH.length;
+  dotsEl.querySelectorAll("button").forEach((b,k) => { b.classList.toggle("on", k===cur); b.classList.toggle("done", k<cur); });
+  toc.querySelectorAll("a").forEach((a,k) => a.classList.toggle("on", k===cur));
+  document.querySelectorAll(".chap").forEach((s,k) => s.classList.toggle("on", k===cur));
+  if (!opts.keepSentence) sentIdx = 0;
+  showSentence();
+  if (opts.scroll && window.matchMedia("(min-width:1000px)").matches){
+    const sec = document.getElementById(CH[cur].id);
+    if (sec) sec.scrollIntoView({behavior: reduce ? "auto" : "smooth", block:"start"});
+  }
+}
+
+function setPlayUI(){
+  $("#playLbl").textContent = playing ? "Duraklat" : (sentIdx > 0 ? "Devam et" : "Anlatımı başlat");
+  $("#playIco").innerHTML = playing ? '<path d="M3 2h4v12H3zM9 2h4v12H9z"/>' : '<path d="M4 2l10 6-10 6z"/>';
+}
+
+function speakCurrent(){
+  const my = ++token;
+  const s = sentencesOf(CH[cur]);
+  if (sentIdx >= s.length){
+    stopFlap();
+    if ($("#autoIn").checked && cur < CH.length-1){
+      setTimeout(() => { if (my !== token || !playing) return; setChapter(cur+1, {scroll:true}); speakCurrent(); }, 700);
+    } else { playing = false; sentIdx = 0; showSentence(); setPlayUI(); }
+    return;
+  }
+  showSentence();
+  const text = s[sentIdx];
+  const est = Math.max(1800, text.length * 70 / Number(rateIn.value));
+  let advanced = false;
+  const next = () => { if (advanced || my !== token) return; advanced = true; clearTimeout(fallbackTimer); stopFlap(); sentIdx++; setTimeout(() => { if (my === token && playing) speakCurrent(); }, 220); };
+  const mute = !synth || voiceSel.value === "mute";
+  if (mute){
+    startFlap(); fallbackTimer = setTimeout(next, est); return;
+  }
+  const u = new SpeechSynthesisUtterance(text);
+  u.lang = "tr-TR"; u.rate = Number(rateIn.value); u.pitch = 1.05;
+  if (voiceSel.value !== "" && voices[Number(voiceSel.value)]) u.voice = voices[Number(voiceSel.value)];
+  u.onstart = () => { if (my === token) startFlap(); };
+  u.onend = next;
+  u.onerror = (e) => { if (e && (e.error === "interrupted" || e.error === "canceled")) return; next(); };
+  window.__utt = u; // bazı tarayıcılarda çöp toplayıcı olayı kesmesin
+  synth.cancel();
+  synth.speak(u);
+  startFlap();
+  fallbackTimer = setTimeout(next, est * 2.4 + 4000);
+}
+
+function play(){ playing = true; setPlayUI(); speakCurrent(); }
+function pause(){ playing = false; token++; clearTimeout(fallbackTimer); if (synth) synth.cancel(); stopFlap(); setPlayUI(); }
+function jump(i, autoplay){ const was = playing || autoplay; pause(); setChapter(i, {scroll:true}); sentIdx = 0; if (was) play(); else setPlayUI(); }
+
+$("#playBtn").addEventListener("click", () => playing ? pause() : play());
+$("#prevBtn").addEventListener("click", () => jump(cur-1));
+$("#nextBtn").addEventListener("click", () => jump(cur+1));
+dotsEl.addEventListener("click", e => { const b = e.target.closest("button"); if (b) jump(Number(b.dataset.i)); });
+chaptersEl.addEventListener("click", e => {
+  const b = e.target.closest("[data-listen]"); if (b){ jump(Number(b.dataset.listen), true); }
+});
+toc.addEventListener("click", e => { const a = e.target.closest("a[data-i]"); if (!a) return; if (!playing) setChapter(Number(a.dataset.i)); });
+voiceSel.addEventListener("change", () => { if (playing){ pause(); play(); } });
+
+// kaydırınca sahne o bölüme geçsin (oynatma yokken)
+if ("IntersectionObserver" in window){
+  const io = new IntersectionObserver(entries => {
+    if (playing) return;
+    entries.forEach(en => { if (en.isIntersecting){ const i = Number(en.target.dataset.i); if (i !== cur) setChapter(i); } });
+  }, {rootMargin:"-35% 0px -55% 0px"});
+  document.querySelectorAll(".chap").forEach(s => io.observe(s));
+}
+
+setChapter(0); setPlayUI();
+requestAnimationFrame(loop);
+window.addEventListener("beforeunload", () => { if (synth) synth.cancel(); });
+})();
+</script>
