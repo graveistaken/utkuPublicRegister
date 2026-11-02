@@ -1,0 +1,581 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Çöp Adam Savaşı</title>
+<style>
+  html,body{margin:0;height:100%;background:#000;overflow:hidden}
+  canvas{display:block;width:100vw;height:100vh}
+  #ov{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;
+      background:rgba(0,0,0,.88);color:#fff;font-family:system-ui,sans-serif;cursor:pointer;gap:14px;user-select:none}
+  #ov b{font-size:44px;letter-spacing:8px}
+  #ov b i{color:#f21b0b;font-style:normal}
+  #ov span{opacity:.7;font-size:15px}
+  #bar{position:fixed;left:0;bottom:0;height:3px;background:#f21b0b;width:0}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="bar"></div>
+<div id="ov"><b>SAVA<i>Ş</i></b><span>▶ Başlatmak için tıkla (sesli)</span></div>
+<script>
+// ===================== temel =====================
+const cv = document.getElementById('c'), X = cv.getContext('2d');
+const ov = document.getElementById('ov'), bar = document.getElementById('bar');
+let W, H, DPR;
+function rs(){ DPR = Math.min(2, devicePixelRatio || 1); W = innerWidth; H = innerHeight; cv.width = W*DPR; cv.height = H*DPR; }
+addEventListener('resize', rs); rs();
+
+const R = Math.random, PI = Math.PI;
+const clamp = (v,a,b) => v<a?a:v>b?b:v, lerp = (a,b,t) => a+(b-a)*t;
+const eio = t => t<.5 ? 2*t*t : 1-Math.pow(-2*t+2,2)/2;
+const eo = t => 1-Math.pow(1-t,3), ei = t => t*t*t;
+function rng(s){ return () => { s = (s*16807) % 2147483647; return (s-1)/2147483646; }; }
+
+const BLK = '#0e0e0e', RED = '#f21b0b', WHT = '#ffffff';
+const cam = { x:0, y:-15, z:1 };
+let shake = 0, flashA = 0, flashC = '255,255,255', fadeA = 0;
+let parts = [];
+let si = 0, st = 0, prevSt = -1, started = false;
+
+const at  = tm => prevSt < tm && st >= tm;          // tam bu anda mı geçtik
+const seg = (a,b) => clamp((st-a)/(b-a), 0, 1);
+
+// ===================== ses =====================
+let AC, NB, master;
+function initAudio(){
+  try{
+    AC = new (window.AudioContext || window.webkitAudioContext)();
+    NB = AC.createBuffer(1, AC.sampleRate*2, AC.sampleRate);
+    const d = NB.getChannelData(0); for (let i=0;i<d.length;i++) d[i] = R()*2-1;
+    master = AC.createGain(); master.gain.value = .55; master.connect(AC.destination);
+  }catch(e){ AC = null; }
+}
+function noise(dur,type,f0,f1,vol){
+  const t = AC.currentTime, s = AC.createBufferSource(); s.buffer = NB;
+  const fl = AC.createBiquadFilter(); fl.type = type;
+  fl.frequency.setValueAtTime(f0,t); fl.frequency.exponentialRampToValueAtTime(f1,t+dur);
+  const g = AC.createGain(); g.gain.setValueAtTime(vol,t); g.gain.exponentialRampToValueAtTime(.001,t+dur);
+  s.connect(fl); fl.connect(g); g.connect(master); s.start(t, R()); s.stop(t+dur);
+}
+function tone(dur,f0,f1,vol,type){
+  const t = AC.currentTime, o = AC.createOscillator(); o.type = type || 'sine';
+  o.frequency.setValueAtTime(f0,t); o.frequency.exponentialRampToValueAtTime(f1,t+dur);
+  const g = AC.createGain(); g.gain.setValueAtTime(vol,t); g.gain.exponentialRampToValueAtTime(.001,t+dur);
+  o.connect(g); g.connect(master); o.start(t); o.stop(t+dur);
+}
+function snd(n, v){
+  if (!AC) return; v = v ?? 1;
+  if (n==='hit'){ noise(.14,'bandpass',2600,500,.55*v); tone(.16,190,45,.6*v); }
+  else if (n==='boom'){ noise(1.5,'lowpass',1200,50,.95*v); tone(1.1,95,22,.9*v); }
+  else if (n==='whoosh'){ noise(.5,'bandpass',250,2800,.4*v); }
+  else if (n==='zap'){ tone(.12,700+R()*900,180,.12*v,'sawtooth'); noise(.1,'highpass',3000,7000,.18*v); }
+  else if (n==='rumble'){ noise(2.2,'lowpass',180,60,.5*v); }
+}
+
+// ===================== parçacıklar & efektler =====================
+function P_(o){ if (parts.length < 1800) parts.push(Object.assign({life:0,max:1,vx:0,vy:0,r:1,g:0,drag:0,col:'200,200,200',t:'dust',a:1,grow:1.5},o)); }
+function upParts(dt){
+  for (const p of parts){
+    p.life += dt; p.vy += p.g*dt;
+    const k = Math.exp(-p.drag*dt); p.vx *= k; p.vy *= k;
+    p.x += p.vx*dt; p.y += p.vy*dt;
+    if (p.floor && p.y > 0){ p.y = 0; p.vy = 0; }
+  }
+  parts = parts.filter(p => p.life < p.max);
+}
+function drawParts(){
+  for (const p of parts){
+    const k = p.life/p.max, a = p.a*(1-k);
+    if (p.t==='dust'){
+      X.fillStyle = `rgba(${p.col},${a})`; X.beginPath(); X.arc(p.x,p.y,p.r*(1+k*p.grow),0,7); X.fill();
+    } else if (p.t==='spark'){
+      X.strokeStyle = `rgba(${p.col},${a})`; X.lineWidth = p.r; X.lineCap = 'round';
+      X.beginPath(); X.moveTo(p.x,p.y); X.lineTo(p.x-p.vx*.05,p.y-p.vy*.05); X.stroke();
+    } else if (p.t==='ring'){
+      const r = p.r + p.life*p.sp;
+      X.strokeStyle = `rgba(${p.col},${a})`; X.lineWidth = Math.max(.01,p.w*(1-k));
+      X.beginPath(); X.ellipse(p.x,p.y,r,r*(p.fl||1),0,0,7); X.stroke();
+    }
+  }
+}
+function impact(x,y,sz,col){
+  col = col || '255,255,255';
+  P_({t:'ring',x,y,r:sz*.4,sp:sz*12,w:sz*.4,max:.22,col});
+  const n = 8 + sz*2;
+  for (let i=0;i<n;i++){
+    const a = R()*PI*2, v = sz*(18+R()*30);
+    P_({t:'spark',x,y,vx:Math.cos(a)*v,vy:Math.sin(a)*v,max:.15+R()*.2,r:sz*.12,drag:4,col});
+  }
+  flashA = Math.max(flashA, .1 + sz*.02); shake = Math.max(shake, sz*.45);
+}
+function dustBurst(x,y,n,sz,col){
+  for (let i=0;i<n;i++){
+    const dir = R()<.5?-1:1;
+    P_({x:x+(R()-.5)*sz,y:y-R()*sz*.3,vx:dir*(4+R()*sz*12),vy:-R()*sz*3,r:sz*(.4+R()*.8),grow:2.5,
+        max:.8+R()*1.1,drag:1.6,col:col||'150,150,150',a:.75,floor:true});
+  }
+}
+function bolt(x1,y1,x2,y2,w,col,glow,jag){
+  const n = 9, dx = x2-x1, dy = y2-y1, L = Math.hypot(dx,dy)||1, nx = -dy/L, ny = dx/L;
+  X.beginPath(); X.moveTo(x1,y1);
+  for (let i=1;i<n;i++){ const t=i/n, o=(R()-.5)*L*(jag||.2); X.lineTo(x1+dx*t+nx*o, y1+dy*t+ny*o); }
+  X.lineTo(x2,y2);
+  X.lineCap = X.lineJoin = 'round';
+  X.shadowColor = glow; X.shadowBlur = 18; X.strokeStyle = glow; X.lineWidth = w*2.2; X.globalAlpha = .5; X.stroke();
+  X.globalAlpha = 1; X.strokeStyle = col; X.lineWidth = w; X.stroke(); X.shadowBlur = 0;
+}
+
+// ===================== çöp adam =====================
+// [gövde eğimi, ön kol üst, ön kol alt, arka kol üst, arka kol alt, ön bacak üst, ön bacak alt, arka bacak üst, arka bacak alt]
+// Açılar dünya açısı: 0 = aşağı, PI/2 = ileri (yüze doğru), PI = yukarı.
+const PO = {
+  stand : [0,   .15,.08, -.15,-.08,  .1,.05,  -.1,-.05],
+  stance: [.15, .9,2.4,   .4,2.0,    .55,.05, -.5,-.15],
+  punch : [.35, 1.6,1.6,  .1,2.2,    .8,.2,   -.7,-.25],
+  kick  : [-.35,.5,1.9,  -1.1,-.5,   1.75,1.7,-.1,-.05],
+  crouch: [.6,  .4,.2,   -.1,.2,     1.4,-.2,  .3,-.9],
+  run1  : [.4,  1.0,2.1, -.9,-.3,    .9,.1,   -.7,-1.9],
+  run2  : [.4, -.9,-.3,   1.0,2.1,  -.7,-1.9,  .9,.1],
+  walk1 : [.05, .4,.25,  -.4,-.3,    .35,.1,  -.35,-.55],
+  walk2 : [.05,-.4,-.3,   .4,.25,   -.35,-.55, .35,.1],
+  fly   : [1.45,1.65,1.6,-1.4,-1.5, -1.45,-1.5,-1.6,-1.65],
+  hurt  : [-.8, 2.6,2.2, -2.4,-2.9,  .9,.3,    .3,.9],
+  land  : [.7,  .4,.2,   -1.3,-1.8,  1.4,0,    .4,-1.4],
+  block : [0,   1.57,1.57,-1.57,-1.57,.45,.05,-.45,-.05],
+  guard : [-.1, 2.5,3.0,  2.1,3.0,   .5,.05,  -.5,-.1],
+  raise : [0,   3.0,3.1, -.25,-.1,   .15,.05, -.15,-.05],
+  burst : [0,   2.0,2.4, -2.0,-2.4,  .5,.15,  -.5,-.15],
+  fall  : [0,   2.6,2.9, -2.6,-2.9,  .2,.1,   -.2,-.1],
+  slam  : [.5,  .9,.3,   -.6,-.2,    .7,.1,   -.6,-.2],
+};
+const mix = (a,b,t) => a.map((v,i) => lerp(v,b[i],t));
+const walkPose = (t,sp,A,B) => mix(A||PO.walk1, B||PO.walk2, .5+.5*Math.sin(t*sp));
+
+function fig(o){
+  const p = o.pose, s = o.s||10, f = o.f||1, sp = (o.spin||0)*f;
+  const d = (a,l) => [Math.sin(a+sp)*l*f, Math.cos(a+sp)*l];
+  const T=s*1.0, UA=s*.48, FA=s*.48, TH=s*.58, SH=s*.6, HR=s*.34;
+  const tor = d(PI-p[0],T);
+  const k1=d(p[5],TH), f1=d(p[6],SH), k2=d(p[7],TH), f2=d(p[8],SH);
+  let hx = o.x, hy = o.y;
+  if (o.g != null) hy = o.g - Math.max(k1[1]+f1[1], k2[1]+f2[1]) - s*.085;
+  const nx = hx+tor[0], ny = hy+tor[1];
+  const hd = d(PI-p[0],T+HR*.92), cx = hx+hd[0], cy = hy+hd[1];
+  const e1=d(p[1],UA), h1=d(p[2],FA), e2=d(p[3],UA), h2=d(p[4],FA);
+  X.save(); X.globalAlpha = o.alpha ?? 1;
+  X.strokeStyle = X.fillStyle = o.c; X.lineWidth = s*.17; X.lineCap = X.lineJoin = 'round';
+  X.beginPath();
+  X.moveTo(nx,ny); X.lineTo(nx+e2[0],ny+e2[1]); X.lineTo(nx+e2[0]+h2[0],ny+e2[1]+h2[1]);
+  X.moveTo(hx,hy); X.lineTo(hx+k2[0],hy+k2[1]); X.lineTo(hx+k2[0]+f2[0],hy+k2[1]+f2[1]);
+  X.moveTo(hx,hy); X.lineTo(nx,ny);
+  X.moveTo(hx,hy); X.lineTo(hx+k1[0],hy+k1[1]); X.lineTo(hx+k1[0]+f1[0],hy+k1[1]+f1[1]);
+  X.moveTo(nx,ny); X.lineTo(nx+e1[0],ny+e1[1]); X.lineTo(nx+e1[0]+h1[0],ny+e1[1]+h1[1]);
+  X.stroke();
+  X.beginPath(); X.arc(cx,cy,HR,0,7); X.fill();
+  if (o.c !== WHT && o.eyes !== false){
+    const ox = o.front ? 0 : f*HR*.3, gap = HR*.3, ry = Math.max(HR*.04, HR*.3*(1-(o.blink||0))), rx = HR*.14;
+    X.fillStyle = '#fff';
+    X.beginPath(); X.ellipse(cx+ox-gap,cy-HR*.05,rx,ry,0,0,7); X.ellipse(cx+ox+gap,cy-HR*.05,rx,ry,0,0,7); X.fill();
+  }
+  X.restore();
+  return { hand:[nx+e1[0]+h1[0], ny+e1[1]+h1[1]], foot:[hx+k1[0]+f1[0], hy+k1[1]+f1[1]], head:[cx,cy], hip:[hx,hy], neck:[nx,ny] };
+}
+function ghosts(fn, t, n, gap){ for (let i=n;i>=1;i--){ const o = fn(t-i*(gap||.025)); if (o){ o.alpha = .12*(n-i+1)/n; fig(o); } } }
+
+// ===================== arka plan & kamera =====================
+const TH = {
+  dark : { s1:'#3a3a3a', s2:'#474747', g1:'#333', g2:'#2a2a2a', rock:'#282828', cloud:'#505050' },
+  light: { s1:'#cbcbcb', s2:'#dcdcdc', g1:'#c3c3c3', g2:'#b5b5b5', rock:'#a0a0a0', cloud:'#f3f3f3' },
+  brown: { s1:'#7a6862', s2:'#6c5b55', g1:'#5d4c47', g2:'#51423d', rock:'#463833', cloud:'#86746d' },
+};
+const ROCKS = (() => { const r = rng(7), a = []; for (let i=0;i<70;i++) a.push({ x:r()*1000, w:2+r()*22, h:.6+r()*(r()<.2?13:4), t:r()<.3 }); return a; })();
+const CLOUDS = (() => { const r = rng(9), a = []; for (let i=0;i<9;i++) a.push({ x:r(), y:.15+r()*.6, w:8+r()*16 }); return a; })();
+const STARS = (() => { const r = rng(5), a = []; for (let i=0;i<300;i++) a.push([r(), r(), r()*1.4+.3, r()*6, r()<.15]); return a; })();
+const mod = (a,b) => ((a%b)+b)%b;
+
+function drawBG(th){
+  const k0 = H/100, T = TH[th];
+  const hz = clamp(H*.47 + (-cam.y-15)*k0*.35*Math.min(cam.z,2), H*.08, H*.92);
+  let g = X.createLinearGradient(0,0,0,hz); g.addColorStop(0,T.s1); g.addColorStop(1,T.s2);
+  X.fillStyle = g; X.fillRect(0,0,W,hz+1);
+  g = X.createLinearGradient(0,hz,0,H); g.addColorStop(0,T.g1); g.addColorStop(1,T.g2);
+  X.fillStyle = g; X.fillRect(0,hz,W,H-hz);
+  // bulutlar
+  X.fillStyle = T.cloud;
+  for (const c of CLOUDS){
+    const span = W*1.6, sx = mod(c.x*span - cam.x*k0*.08, span) - W*.3, sy = hz - c.y*hz*.6, w = c.w*k0;
+    X.beginPath(); X.ellipse(sx,sy,w,w*.16,0,0,7); X.ellipse(sx+w*.4,sy-w*.08,w*.45,w*.14,0,0,7); X.ellipse(sx-w*.5,sy+w*.02,w*.4,w*.1,0,0,7); X.fill();
+  }
+  // kayalar
+  X.fillStyle = T.rock; const span = 1000*k0*.5;
+  for (const r of ROCKS){
+    const sx = mod(r.x*k0*.5 - cam.x*k0*.22, span) - k0*15; if (sx > W+40) continue;
+    const w = r.w*k0*.35, h = r.h*k0*.35;
+    X.beginPath();
+    if (r.t){ X.moveTo(sx,hz+1); X.lineTo(sx+w*.1,hz-h*2.2); X.lineTo(sx+w*.3,hz-h*2.3); X.lineTo(sx+w*.4,hz+1); }
+    else { X.moveTo(sx,hz+1); X.lineTo(sx+w*.15,hz-h); X.lineTo(sx+w*.7,hz-h*.9); X.lineTo(sx+w,hz+1); }
+    X.fill();
+  }
+  // yer çizgileri
+  X.strokeStyle = th==='light' ? 'rgba(0,0,0,.06)' : 'rgba(0,0,0,.18)'; X.lineWidth = 1;
+  for (let i=0;i<6;i++){ const y = hz + (H-hz)*(.15+i*.15), x0 = mod(i*337 - cam.x*k0*(.3+i*.15), W*1.4) - W*.2;
+    X.beginPath(); X.moveTo(x0,y); X.lineTo(x0+W*.18,y+2); X.stroke(); }
+}
+function drawSpace(t){
+  X.fillStyle = '#030709'; X.fillRect(0,0,W,H);
+  for (const s of STARS){
+    const a = .4 + .6*Math.abs(Math.sin(t*1.5+s[3]));
+    X.fillStyle = s[4] ? `rgba(120,255,170,${a})` : `rgba(255,255,255,${a})`;
+    X.fillRect(mod(s[0]*W - t*6, W), s[1]*H, s[2], s[2]);
+  }
+}
+function applyCam(){
+  const k = H/100*cam.z, sx = (R()-.5)*shake*H/100, sy = (R()-.5)*shake*H/100;
+  X.setTransform(DPR*k,0,0,DPR*k, DPR*(W/2-cam.x*k+sx), DPR*(H/2-cam.y*k+sy));
+}
+function begin(th){ X.setTransform(DPR,0,0,DPR,0,0); if (th==='space') drawSpace(st); else drawBG(th); applyCam(); }
+
+// ===================== sahneler =====================
+const SC = [];
+
+// 1 — siyah güç topluyor
+SC.push({ d:6, f(t,dt){
+  cam.x = 0; cam.y = -9; cam.z = 1+t*.13; shake = Math.max(shake, t*.14);
+  begin('dark');
+  const cr = rng(3); X.strokeStyle = 'rgba(15,15,15,.85)'; X.lineWidth = .35; X.lineCap = 'round';
+  for (let i=0;i<16;i++){ const a = cr()*PI*2, L = (8+cr()*45)*clamp(t/4,0,1); X.beginPath(); X.moveTo(0,0);
+    for (let j=1;j<=4;j++){ const aa = a+(cr()-.5)*.5; X.lineTo(Math.cos(aa)*L*j/4, Math.sin(aa)*L*j/4*.16); } X.stroke(); }
+  for (let i=0;i<8;i++){
+    const r = 8+i*2.4+Math.sin(t*3+i), a0 = t*(3+i*.45)+i*1.7;
+    X.beginPath(); X.ellipse(0,-9,r*1.25,r,0,a0,a0+1.2+i*.12);
+    X.strokeStyle = `rgba(235,235,235,${.1+.3*clamp(t/3,0,1)})`; X.lineWidth = .3+.1*i; X.stroke();
+  }
+  if (R() < dt*45){ const a = R()*PI*2, r = 32; P_({t:'spark',x:Math.cos(a)*r,y:-9+Math.sin(a)*r*.6,vx:-Math.cos(a)*45,vy:-Math.sin(a)*27,max:.6,r:.3,col:'225,225,225'}); }
+  fig({ x:Math.sin(t*55)*.012*t*t, g:0, f:1, s:10, c:BLK, pose:PO.crouch });
+  if (t > 1.5){ const p = .5+.5*Math.sin(t*9); X.fillStyle = `rgba(255,30,10,${p})`; X.beginPath(); X.arc(-30,-34,.55,0,7); X.fill(); }
+  if (at(1)) snd('rumble',.7);
+  if (at(5.55)){ flashA = 1; snd('boom'); }
+}});
+
+// 2 — kırmızı iniyor, karşılaşma
+SC.push({ d:6.5, f(t){
+  const land = .8;
+  const rp = t<land ? PO.fall : t<2.3 ? PO.land : mix(PO.land,PO.stance,eio(seg(2.3,2.9)));
+  const bp = mix(PO.crouch,PO.stance,eio(seg(1.4,2.1)));
+  if (t < 3.2){ cam.x = lerp(8,4,t/3.2); cam.y = -16; cam.z = 1.3; }
+  else { const q = eio(seg(3.2,3.8)); cam.x = lerp(4,3,q); cam.y = lerp(-16,-23,q); cam.z = lerp(1.3,3.1,q); }
+  begin('dark');
+  const bl = t>5.2 ? eio(seg(5.2,5.6))*.65 : 0;
+  fig({ x:-14, g:0, f:1, s:10, c:BLK, pose:bp, blink:bl });
+  if (t < land){
+    const ry = lerp(-140,0,ei(t/land));
+    X.strokeStyle = 'rgba(242,27,11,.35)'; X.lineWidth = 1.6; X.beginPath(); X.moveTo(20,ry-160); X.lineTo(20,ry-20); X.stroke();
+    fig({ x:20, y:ry-11, f:-1, s:10, c:RED, pose:rp });
+  } else fig({ x:20, g:0, f:-1, s:10, c:RED, pose:rp, blink:bl });
+  if (at(land)){ impact(20,-1,5); dustBurst(20,0,40,4); shake = 4; snd('boom'); P_({t:'ring',x:20,y:0,r:2,sp:90,w:1.5,max:.5,fl:.18,col:'220,220,220'}); }
+  if (at(2.2)) snd('whoosh',.4);
+}});
+
+// 3 — yakın dövüş
+SC.push({ d:7.2, f(t,dt){
+  const st3 = t => {
+    let bx, rx, bp, rp, by = null, fb = 1;
+    if (t < .55){ const q = ei(clamp(t/.55,0,1)); bx = lerp(-14,-5,q); rx = lerp(20,5,q);
+      const ph = Math.floor(t*14)%2; bp = ph?PO.run1:PO.run2; rp = ph?PO.run2:PO.run1; }
+    else if (t < 4.6){ const b = Math.floor((t-.55)/.32), lt = ((t-.55)%.32)/.32, atkB = b%2===0;
+      const hit = b%3===2 ? PO.kick : PO.punch, w = Math.sin(b*1.7)*3;
+      bx = -5+w; rx = 5+w; const sk = lt<.35 ? eo(lt/.35) : 1-eio((lt-.35)/.65)*.7;
+      bp = atkB ? mix(PO.stance,hit,sk) : mix(PO.stance,PO.guard,sk);
+      rp = atkB ? mix(PO.stance,PO.guard,sk) : mix(PO.stance,hit,sk); }
+    else { const q = t-4.6; rx = 5;
+      rp = q<.5 ? mix(PO.stance,PO.kick,eo(clamp(q/.12,0,1))) : mix(PO.kick,PO.stance,eio(clamp((q-.8)/.6,0,1)));
+      bx = -5-(1-Math.exp(-q*2.3))*55;
+      if (q < .7){ by = -11-Math.sin(q/.7*PI)*12; bp = PO.hurt; }
+      else bp = mix(PO.land,PO.stance,eio(clamp((q-1.2)/.6,0,1))); }
+    return { b:{x:bx,y:by,g:by==null?0:null,f:fb,s:10,c:BLK,pose:bp}, r:{x:rx,g:0,f:-1,s:10,c:RED,pose:rp} };
+  };
+  if (t < 4.6){ cam.x = Math.sin(t*1.3)*2; cam.y = -15; cam.z = 1.75+Math.sin(t*2)*.08; }
+  else { const q = eo(seg(4.6,5.6)); cam.x = lerp(0,-28,q); cam.y = -15; cam.z = lerp(1.75,1.1,q); }
+  begin('dark');
+  if (t < .6 || (t > 4.6 && t < 5.3)) ghosts(tt => st3(tt).b, t, 4); if (t < .6) ghosts(tt => st3(tt).r, t, 4);
+  const s = st3(t);
+  const B = fig(s.b), Rd = fig(s.r);
+  if (at(.55)){ impact(0,-16,6); flashA = .45; snd('boom',.7); }
+  const b = Math.floor((t-.55)/.32), pb = Math.floor((prevSt-.55)/.32);
+  if (t > .87 && t < 4.6 && b !== pb){ const h = b%2===1 ? B : Rd; const hp = b%2===1 ? B.foot : Rd.foot;
+    const p = (b%3===0) ? hp : (b%2===1 ? B.hand : Rd.hand); impact(p[0],p[1],2.5+R()*1.5); snd('hit'); }
+  if (at(4.65)){ impact(Rd.foot[0],Rd.foot[1],7); flashA = .5; snd('boom',.8); }
+  if (t > 5.3 && t < 6.2 && R() < .7) P_({x:B.hip[0]-2,y:-.5,vx:-10-R()*20,vy:-R()*6,r:.8+R(),grow:2.5,max:1,drag:2,col:'150,150,150',a:.6,floor:true});
+}});
+
+// 4 — beyaz geliyor, üçlü çarpışma
+SC.push({ d:6.2, f(t){
+  let rx, bx, rp, bp, wp = PO.stand, ry = null, by = null, rsp = 0;
+  if (t < .6){ const q = eo(t/.6); rx = lerp(-70,-12,q); bx = lerp(70,12,q); const ph = Math.floor(t*14)%2;
+    rp = ph?PO.run1:PO.run2; bp = ph?PO.run2:PO.run1; wp = mix(PO.stand,PO.block,eo(t/.6)); }
+  else if (t < 2.6){ const tr = Math.sin(t*70)*.25; rx = -12+tr; bx = 12-tr; rp = PO.kick; bp = PO.punch; wp = PO.block; }
+  else { const q = t-2.6; rx = -12-(1-Math.exp(-q*2.5))*90; bx = -rx; ry = -11-Math.sin(clamp(q,0,1)*PI)*14;
+    by = ry; rp = bp = PO.hurt; rsp = q*6; wp = mix(PO.block,PO.burst,eo(clamp(q/.2,0,1))); }
+  cam.x = 0; cam.y = -17; cam.z = t < 2.6 ? 1.35+t*.06 : lerp(1.5,.8,eo(seg(2.6,3.4)));
+  begin('light');
+  if (t < .6){ ghosts(tt => ({x:lerp(-70,-12,eo(clamp(tt/.6,0,1))),g:0,f:1,s:10,c:RED,pose:rp}), t, 4);
+               ghosts(tt => ({x:lerp(70,12,eo(clamp(tt/.6,0,1))),g:0,f:-1,s:10,c:BLK,pose:bp}), t, 4); }
+  fig({ x:0, g:0, f:1, s:10.5, c:WHT, pose:wp });
+  const Rd = fig({ x:rx, y:ry, g:ry==null?0:null, f:1, s:10, c:RED, pose:rp, spin:rsp });
+  const Bk = fig({ x:bx, y:by, g:by==null?0:null, f:-1, s:10, c:BLK, pose:bp, spin:rsp });
+  if (at(.6)){ impact(Rd.foot[0],Rd.foot[1],5,'255,255,255'); impact(Bk.hand[0],Bk.hand[1],5,'255,255,255'); flashA = .35; snd('boom',.7);
+    P_({t:'ring',x:0,y:-15,r:5,sp:60,w:2,max:.5,col:'90,90,90'}); }
+  if (t > .6 && t < 2.6 && R() < .6){ const d = R()<.5?-1:1; P_({x:d*3,y:-.5,vx:d*(30+R()*40),vy:-R()*4,r:.6+R(),grow:3,max:.9,drag:1.5,col:'150,150,150',a:.5,floor:true}); }
+  if (t > .6 && t < 2.6 && R() < .2) snd('zap',.4);
+  if (at(2.6)){ P_({t:'ring',x:0,y:-15,r:5,sp:140,w:3,max:.6,col:'70,70,70'}); P_({t:'ring',x:0,y:0,r:5,sp:160,w:2,max:.8,fl:.15,col:'90,90,90'});
+    impact(0,-15,7,'255,255,255'); flashA = .6; dustBurst(0,0,50,5); snd('boom'); }
+}});
+
+// 5 — ufukta kovalamaca (geniş çekim)
+SC.push({ d:4, f(t){
+  cam.x = t*45; cam.y = -30; cam.z = .4;
+  begin('light');
+  const rx = -160+t*135, wx = rx-28;
+  const ph = Math.floor(t*16)%2;
+  let g = X.createLinearGradient(rx-90,0,rx,0); g.addColorStop(0,'rgba(242,27,11,0)'); g.addColorStop(1,'rgba(242,27,11,.6)');
+  X.strokeStyle = g; X.lineWidth = 1.5; X.beginPath(); X.moveTo(rx-90,-5); X.lineTo(rx,-5); X.stroke();
+  g = X.createLinearGradient(wx-90,0,wx,0); g.addColorStop(0,'rgba(255,255,255,0)'); g.addColorStop(1,'rgba(255,255,255,.9)');
+  X.strokeStyle = g; X.beginPath(); X.moveTo(wx-90,-5); X.lineTo(wx,-5); X.stroke();
+  fig({ x:rx, g:0, f:1, s:5, c:RED, pose:ph?PO.run1:PO.run2 });
+  fig({ x:wx, g:0, f:1, s:5, c:WHT, pose:ph?PO.run2:PO.run1 });
+  if (R() < .8){ P_({x:rx-3,y:-.3,vx:-20-R()*20,vy:-R()*6,r:1+R(),grow:3,max:1.2,drag:1,col:'160,160,160',a:.6,floor:true});
+                 P_({x:wx-3,y:-.3,vx:-20-R()*20,vy:-R()*6,r:1+R(),grow:3,max:1.2,drag:1,col:'160,160,160',a:.6,floor:true}); }
+  if (at(.2)) snd('whoosh',.6);
+  if (at(1.8)) snd('whoosh',.6);
+}});
+
+// 6 — kırmızı ışın yağmuru & beyaz şimşek
+const BEAMS = (() => { const r = rng(11), a = []; for (let i=0;i<24;i++) a.push({ x:(r()-.5)*130, t0:.25+i*.16+r()*.1, w:1.5+r()*3 }); return a; })();
+SC.push({ d:5.2, f(t){
+  cam.x = 0; cam.y = -42; cam.z = .85;
+  begin('light');
+  const wx = Math.sin(t*2.6)*45 + Math.sin(t*7)*6, wv = Math.cos(t*2.6)*2.6*45, wf = wv>=0?1:-1;
+  const jumping = t > 4.3, wy = jumping ? -11-eo(seg(4.3,4.9))*55 : null;
+  for (const b of BEAMS){
+    const lt = t-b.t0; if (lt < 0 || lt > .9) continue;
+    const top = -150, bottom = lerp(top,0,eo(clamp(lt/.14,0,1))), a = lt<.55 ? 1 : 1-(lt-.55)/.35;
+    X.globalAlpha = a; X.fillStyle = RED; X.fillRect(b.x-b.w/2,top,b.w,bottom-top);
+    X.fillStyle = 'rgba(255,190,180,.8)'; X.fillRect(b.x-b.w*.15,top,b.w*.3,bottom-top);
+    X.globalAlpha = 1;
+    if (prevSt-b.t0 < .14 && lt >= .14){ dustBurst(b.x,0,12,3,'200,90,80'); impact(b.x,-1,3,'242,27,11'); snd('hit',.5); }
+  }
+  const ry = -78+Math.sin(t*2)*2;
+  fig({ x:0, y:ry, f:1, s:8, c:RED, pose:mix(PO.raise,PO.burst,.5+.5*Math.sin(t*5)) });
+  ghosts(tt => ({ x:Math.sin(tt*2.6)*45+Math.sin(tt*7)*6, g:0, f:wf, s:9, c:WHT, pose:Math.floor(tt*12)%2?PO.run1:PO.run2 }), t, 4, .04);
+  const Wt = fig({ x:wx, y:wy, g:jumping?null:0, f:wf, s:9, c:WHT, pose:jumping?PO.raise:(Math.floor(t*12)%2?PO.run1:PO.run2) });
+  for (let i=0;i<2;i++){ const a = -PI/2+(R()-.5)*1.8, L = 15+R()*25;
+    bolt(Wt.head[0],Wt.head[1],Wt.head[0]+Math.cos(a)*L,Wt.head[1]+Math.sin(a)*L,.5,'#fff','#bfe8ff'); }
+  if (R() < .25) snd('zap',.35);
+  if (at(4.3)){ flashA = .4; snd('whoosh'); }
+  if (at(4.85)){ impact(0,ry,6); flashA = .7; snd('boom'); }
+}});
+
+// 7 — yumruk yumruğa, turuncu patlama
+SC.push({ d:3.6, f(t){
+  cam.x = 0; cam.y = -29; cam.z = lerp(3,4.4,t/3.6);
+  begin('brown');
+  const push = t > 2.7 ? (t-2.7)*70 : 0, tr = Math.sin(t*80)*.15;
+  const Rd = fig({ x:-12.5-push+tr, y:-20, f:1, s:10, c:RED, pose:PO.punch });
+  fig({ x:12.5+push-tr, y:-20, f:-1, s:10, c:WHT, pose:PO.punch });
+  const cx = Rd.hand[0]+.5, cy = Rd.hand[1];
+  if (t < 2.75){
+    const r = 7+Math.sin(t*20)*1.2+t*2, g = X.createRadialGradient(cx,cy,0,cx,cy,r);
+    g.addColorStop(0,'rgba(255,255,220,1)'); g.addColorStop(.25,'rgba(255,190,60,.9)'); g.addColorStop(1,'rgba(255,120,0,0)');
+    X.fillStyle = g; X.beginPath(); X.arc(cx,cy,r,0,7); X.fill();
+    for (let i=0;i<3;i++){ const a = R()*PI*2, L = 4+R()*8; bolt(cx,cy,cx+Math.cos(a)*L,cy+Math.sin(a)*L,.25,'#fff6c0','#ffb020'); }
+    if (R() < .4) P_({t:'spark',x:cx,y:cy,vx:(R()-.5)*80,vy:(R()-.5)*80,max:.3,r:.2,drag:3,col:'255,200,80'});
+    shake = Math.max(shake,.5+t*.4);
+  }
+  if (at(.1)) snd('rumble',.8);
+  if (R() < .3 && t < 2.7) snd('zap',.3);
+  if (at(2.7)){ flashA = 1; flashC = '255,220,170'; shake = 9; snd('boom'); impact(cx,cy,9,'255,200,80'); }
+}});
+
+// 8 — yerde sürüklenme, iz
+SC.push({ d:4.6, f(t){
+  const xAt = t => -55+(1-Math.exp(-t*1.4))*95;
+  const x0 = xAt(t), q = Math.exp(-t*1.4);
+  cam.x = t<2.4 ? x0 : lerp(xAt(2.4), xAt(2.4)+70, eio(seg(2.4,4.4))); cam.y = -12; cam.z = lerp(1.15,.7,seg(2.4,4.4));
+  begin('light');
+  X.strokeStyle = 'rgba(80,80,80,.55)'; X.lineCap = 'round';
+  for (let i=0;i<3;i++){ X.lineWidth = .5+i*.3; X.beginPath(); X.moveTo(-60,i*.6-.4);
+    for (let x=-60;x<=x0-4;x+=3) X.lineTo(x, i*.6-.4+Math.sin(x*.7+i)*.25); X.stroke(); }
+  fig({ x:x0, y:-6, f:1, s:9, c:RED, pose:PO.hurt, spin:t*14*q });
+  fig({ x:x0-9, y:-6, f:-1, s:9, c:WHT, pose:PO.hurt, spin:-t*11*q });
+  if (q > .15 && R() < .9) P_({x:x0-5,y:-.5,vx:-10-R()*25,vy:-R()*10,r:1+R()*1.5,grow:3,max:1.4,drag:1.2,col:'150,150,150',a:.6,floor:true});
+  if (at(.05)) snd('rumble',.9);
+}});
+
+// 9 — siyahın küpü
+SC.push({ d:5.6, f(t){
+  cam.x = 0; cam.y = -30; cam.z = .8;
+  begin('dark');
+  const bp = t<1 ? PO.stance : t<3.1 ? mix(PO.stance,PO.raise,eo(seg(1,1.4))) : mix(PO.raise,PO.slam,eo(seg(3.1,3.25)));
+  fig({ x:-35, g:0, f:1, s:10, c:BLK, pose:bp });
+  if (t < 3.35) fig({ x:30, g:0, f:-1, s:10, c:RED, pose:mix(PO.land,PO.stance,eio(seg(.3,1.2))), blink:t>2.5?.5:0 });
+  const ap = eo(seg(1,2)), cy = t<3.1 ? -72+Math.sin(t*2)*2 : lerp(-72,-12.5,ei(seg(3.1,3.35)));
+  if (ap > 0 && t < 5){
+    const sz = 12.5, ry = t*1.3, rx = .45, V = [];
+    for (let i=0;i<8;i++){ let x = (i&1?1:-1)*sz, y = (i&2?1:-1)*sz, z = (i&4?1:-1)*sz;
+      let x2 = x*Math.cos(ry)-z*Math.sin(ry), z2 = x*Math.sin(ry)+z*Math.cos(ry);
+      let y2 = y*Math.cos(rx)-z2*Math.sin(rx); V.push([30+x2, cy+y2]); }
+    const E = [[0,1],[2,3],[4,5],[6,7],[0,2],[1,3],[4,6],[5,7],[0,4],[1,5],[2,6],[3,7]];
+    const al = t > 4.2 ? 1-seg(4.2,5) : ap;
+    X.fillStyle = `rgba(0,0,0,${.2*al})`; X.fillRect(30-sz*1.3,cy-sz*1.3,sz*2.6,sz*2.6*0);
+    X.strokeStyle = `rgba(10,10,10,${al})`; X.lineWidth = .5; X.beginPath();
+    for (const [a,b] of E){ X.moveTo(V[a][0],V[a][1]); X.lineTo(V[b][0],V[b][1]); } X.stroke();
+    X.strokeStyle = `rgba(200,200,200,${.25*al})`; X.lineWidth = .2; X.stroke();
+  }
+  if (t > 1 && t < 3.1 && R() < .3) P_({t:'spark',x:-35+R()*4,y:-26-R()*6,vx:(R()-.5)*10,vy:-20-R()*20,max:.5,r:.3,col:'20,20,20'});
+  if (at(1)) snd('rumble',.6);
+  if (at(3.35)){ dustBurst(30,0,70,6,'110,110,110'); impact(30,-2,8,'230,230,230'); shake = 7; flashA = .3; snd('boom'); }
+  if (t > 4.6){ const q = t-4.6, hx = 30-q*320;
+    X.strokeStyle = RED; X.lineWidth = 1.4; X.beginPath(); X.moveTo(30,-8); X.lineTo(Math.max(hx,-200),-8-q*20); X.stroke();
+    X.fillStyle = RED; X.beginPath(); X.arc(hx,-8-q*20,1.4,0,7); X.fill(); }
+  if (at(4.6)){ impact(30,-8,6,'242,27,11'); snd('whoosh'); flashA = .25; }
+}});
+
+// 10 — alçak uçuş, yükselme
+SC.push({ d:4, f(t){
+  cam.x = 0; cam.y = t<3 ? -25 : lerp(-25,-150,ei(seg(3,4))); cam.z = .45;
+  begin('dark');
+  const pos = (t,ph) => { const x = 200-Math.min(t,3)*135 + (t>3?0:0); let y = -5-Math.sin(t*5+ph)*5; if (t>3) y -= Math.pow(t-3,2)*320; return [x - (t>3?(t-3)*30:0), y]; };
+  for (const [ph,col] of [[0,'242,27,11'],[PI,'15,15,15']]){
+    X.lineWidth = 1.2; X.lineCap = 'round';
+    for (let i=0;i<30;i++){ const a = pos(t-i*.02,ph), b = pos(t-(i+1)*.02,ph);
+      X.strokeStyle = `rgba(${col},${(1-i/30)*.9})`; X.beginPath(); X.moveTo(a[0],a[1]); X.lineTo(b[0],b[1]); X.stroke(); }
+    const p = pos(t,ph); X.fillStyle = `rgb(${col})`; X.beginPath(); X.arc(p[0],p[1],1.3,0,7); X.fill();
+    if (t < 3 && R() < .5) P_({x:p[0],y:-.3,vx:10+R()*20,vy:-R()*5,r:1,grow:3,max:1,drag:1,col:'90,90,90',a:.5,floor:true});
+  }
+  for (const tm of [.63,1.26,1.88,2.51]) if (at(tm)){ const p = pos(tm,0); impact(p[0],-5,3); snd('hit',.7); }
+  if (at(3)){ snd('whoosh'); flashA = .2; }
+}});
+
+// 11 — uzayda dövüş
+SC.push({ d:8.5, f(t){
+  cam.x = 0; cam.y = -20; cam.z = 2.2;
+  X.setTransform(DPR,0,0,DPR,0,0); drawSpace(t);
+  // gezegen
+  const pr = Math.max(W,H)*1.15, pcx = -pr*.55 + t*4, pcy = H*.55 + pr*.45;
+  let g = X.createRadialGradient(pcx,pcy,pr*.8,pcx,pcy,pr*1.08);
+  g.addColorStop(0,'rgba(20,90,120,0)'); g.addColorStop(.72,'rgba(40,150,190,.25)'); g.addColorStop(.74,'rgba(150,230,255,.9)'); g.addColorStop(.76,'rgba(60,170,210,.35)'); g.addColorStop(1,'rgba(20,90,120,0)');
+  X.fillStyle = '#071820'; X.beginPath(); X.arc(pcx,pcy,pr*.98,0,7); X.fill();
+  X.fillStyle = g; X.beginPath(); X.arc(pcx,pcy,pr*1.08,0,7); X.fill();
+  X.strokeStyle = 'rgba(210,245,255,.95)'; X.lineWidth = 2.5; X.shadowColor = '#7fdcff'; X.shadowBlur = 25;
+  X.beginPath(); X.arc(pcx,pcy,pr*.98,0,7); X.stroke(); X.shadowBlur = 0;
+  applyCam();
+  if (t < 1.4){ const a = 1-seg(.6,1.4); X.fillStyle = `rgba(110,110,110,${a*.8})`; X.beginPath(); X.moveTo(-6,40); X.lineTo(6,40); X.lineTo(.5,-20); X.lineTo(-.5,-20); X.fill(); }
+  const ang = t*1.6, cx = 0, cy = -20;
+  let rx = cx-Math.cos(ang)*6, ryy = cy-Math.sin(ang)*3, bx = cx+Math.cos(ang)*6, by = cy+Math.sin(ang)*3;
+  const beat = Math.floor((t-1)/.42), lt = ((t-1)%.42)/.42;
+  let rp = PO.stance, bp = PO.stance;
+  if (t > 1 && t < 6){ const sk = lt<.35?eo(lt/.35):1-eio((lt-.35)/.65)*.7; const hit = beat%3===1?PO.kick:PO.punch;
+    if (beat%2){ rp = mix(PO.stance,hit,sk); bp = mix(PO.stance,PO.hurt,sk*.5); } else { bp = mix(PO.stance,hit,sk); rp = mix(PO.stance,PO.hurt,sk*.5); } }
+  let rsp = Math.sin(t*1.3)*.3, rAlpha = 1;
+  if (t >= 6){ const q = t-6; bp = q<.5?mix(PO.stance,PO.kick,eo(clamp(q/.12,0,1))):PO.stance;
+    rx -= q*q*22+q*6; ryy += q*q*16+q*4; rp = PO.hurt; rsp = q*8;
+    if (q > .4){ const L = Math.min(30,q*25); g = X.createLinearGradient(rx,ryy,rx+L,ryy-L*.7);
+      g.addColorStop(0,'rgba(255,200,90,.95)'); g.addColorStop(1,'rgba(255,80,0,0)');
+      X.strokeStyle = g; X.lineWidth = 3; X.lineCap = 'round'; X.beginPath(); X.moveTo(rx,ryy); X.lineTo(rx+L,ryy-L*.7); X.stroke(); } }
+  const fr = rx < bx ? 1 : -1;
+  const Rd = fig({ x:rx, y:ryy+4, f:fr, s:3.2, c:RED, pose:rp, spin:rsp, alpha:rAlpha });
+  const Bk = fig({ x:bx, y:by+4, f:-fr, s:3.2, c:BLK, pose:bp, spin:-rsp*.6 });
+  X.strokeStyle = 'rgba(255,255,255,.25)'; X.lineWidth = .08; X.beginPath(); X.arc(Bk.head[0],Bk.head[1],3.2*.36,0,7); X.stroke();
+  const pb = Math.floor((prevSt-1)/.42);
+  if (t > 1.2 && t < 6 && beat !== pb){ impact((rx+bx)/2,(ryy+by)/2+1,1.2); snd('hit',.45); }
+  if (at(6)){ impact((rx+bx)/2,(ryy+by)/2+1,3); flashA = .4; snd('boom',.6); }
+  if (at(6.4)) snd('whoosh',.8);
+}});
+
+// 12 — meteor düşüşü
+SC.push({ d:4.6, f(t){
+  cam.x = 0; cam.y = -35; cam.z = .5;
+  begin('light');
+  const q = ei(seg(0,1.1)), mx = lerp(-40,40,q), my = lerp(-170,0,q);
+  if (t < 1.1){
+    const g = X.createLinearGradient(-40,-170,mx,my); g.addColorStop(0,'rgba(255,255,255,0)'); g.addColorStop(1,'rgba(255,255,255,1)');
+    X.strokeStyle = g; X.lineWidth = 1.3; X.beginPath(); X.moveTo(-40,-170); X.lineTo(mx,my); X.stroke();
+    X.fillStyle = RED; X.shadowColor = '#ff8a3a'; X.shadowBlur = 15; X.beginPath(); X.arc(mx,my,1.6,0,7); X.fill(); X.shadowBlur = 0;
+  }
+  if (at(.05)) snd('whoosh',.8);
+  if (at(1.1)){ flashA = 1; flashC = '255,255,255'; shake = 12; snd('boom',1.2); dustBurst(40,0,120,10,'235,235,235');
+    P_({t:'ring',x:40,y:0,r:5,sp:220,w:4,max:.9,fl:.2,col:'120,120,120'}); }
+  if (t > 1.1){
+    const r = 70*eo(seg(1.1,2.6)), a = 1-seg(2,4.6);
+    X.fillStyle = `rgba(245,245,245,${a})`; X.beginPath(); X.ellipse(40,0,r*1.4,r,0,PI,0); X.fill();
+    X.fillStyle = `rgba(210,210,210,${a*.8})`; X.beginPath(); X.ellipse(40,0,r*1.7,r*.25,0,PI,0); X.fill();
+    if (t < 2.5) shake = Math.max(shake,3);
+  }
+}});
+
+// 13 — final: yakın planlar, kararma
+SC.push({ d:10, f(t){
+  if (t < 3.5){ const wx = -22+t*6; cam.x = wx+4; cam.y = -18; cam.z = 2.6; }
+  else if (t < 6.8){ cam.x = 0; cam.y = -24; cam.z = lerp(3.2,3.6,seg(3.5,6.8)); }
+  else { cam.x = 0; cam.y = -25.5; cam.z = lerp(3.6,7.5,eio(seg(6.8,9))); }
+  begin('light');
+  if (R() < .3) P_({x:cam.x+(R()-.5)*60,y:-R()*20,vx:8+R()*6,vy:-R(),r:.4+R()*.6,grow:1,max:2,col:'240,240,240',a:.6});
+  if (t < 3.5){ const wx = -22+t*6; fig({ x:wx, g:0, f:1, s:10, c:WHT, pose:walkPose(t,6) }); }
+  else if (t < 6.8){
+    fig({ x:0, g:0, f:1, s:11, c:WHT, pose:PO.stand, front:true });
+    fig({ x:-7.5, g:0, f:1, s:10, c:RED, pose:PO.stand, front:true, blink:eio(seg(5.5,6))*.5 });
+    fig({ x:7.5, g:0, f:1, s:10, c:BLK, pose:PO.stand, front:true, blink:eio(seg(5.5,6))*.5 });
+  } else {
+    fig({ x:0, g:0, f:1, s:10, c:BLK, pose:PO.stand, front:true, blink:eio(seg(7.8,8.4))*.8 });
+  }
+  fadeA = seg(8.7,10);
+  if (at(8.4)) snd('hit',.4);
+}});
+
+// ===================== döngü =====================
+const TOTAL = SC.reduce((a,s) => a+s.d, 0);
+function step(dt){
+  if (!started) return;
+  prevSt = st; st += dt;
+  if (st >= SC[si].d){
+    si++; st = 0; prevSt = -1; flashC = '255,255,255';
+    if (si >= SC.length){ finish(); return; }
+  }
+  upParts(dt);
+  shake *= Math.exp(-dt*5); flashA *= Math.exp(-dt*4);
+}
+function render(dt){
+  X.setTransform(DPR,0,0,DPR,0,0); X.globalAlpha = 1;
+  if (!started){ X.fillStyle = '#000'; X.fillRect(0,0,W,H); return; }
+  fadeA = 0;
+  SC[si].f(st,dt);
+  drawParts();
+  X.setTransform(DPR,0,0,DPR,0,0);
+  if (flashA > .01){ X.fillStyle = `rgba(${flashC},${Math.min(1,flashA)})`; X.fillRect(0,0,W,H); }
+  if (fadeA > 0){ X.fillStyle = `rgba(0,0,0,${fadeA})`; X.fillRect(0,0,W,H); }
+  let el = st; for (let i=0;i<si;i++) el += SC[i].d;
+  bar.style.width = (el/TOTAL*100) + '%';
+}
+function finish(){
+  started = false; si = 0; st = 0; prevSt = -1; parts = []; shake = flashA = 0;
+  ov.innerHTML = '<b>SO<i>N</i></b><span>↻ Tekrar izlemek için tıkla</span>'; ov.style.display = 'flex'; bar.style.width = '0';
+}
+let last = 0;
+function loop(ts){
+  const dt = Math.min(.05, (ts-last)/1000 || 0); last = ts;
+  step(dt); render(dt);
+  requestAnimationFrame(loop);
+}
+ov.addEventListener('click', () => {
+  if (!AC) initAudio(); else if (AC.state === 'suspended') AC.resume();
+  ov.style.display = 'none'; started = true; si = 0; st = 0; prevSt = -1;
+});
+requestAnimationFrame(loop);
+// test kancası: belirli bir saniyeye hızlı ilerlet
+window.__seek = sec => { started = true; ov.style.display = 'none'; si = 0; st = 0; prevSt = -1; parts = [];
+  const n = Math.round(sec*30); for (let i=0;i<n;i++){ step(1/30); if (!started) return; render(1/30); } };
+</script>
+</body>
+</html>
