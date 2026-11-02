@@ -5,14 +5,15 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Çöp Adam Savaşı</title>
 <style>
-  html,body{margin:0;height:100%;background:#000;overflow:hidden}
+  :root{--bg:#000;--fg:#fff;--accent:#f21b0b;color-scheme:dark}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--fg);overflow:hidden}
   canvas{display:block;width:100vw;height:100vh}
   #ov{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;
-      background:rgba(0,0,0,.88);color:#fff;font-family:system-ui,sans-serif;cursor:pointer;gap:14px;user-select:none}
+      background:rgba(0,0,0,.88);color:var(--fg);font-family:system-ui,sans-serif;cursor:pointer;gap:14px;user-select:none}
   #ov b{font-size:44px;letter-spacing:8px}
-  #ov b i{color:#f21b0b;font-style:normal}
+  #ov b i{color:var(--accent);font-style:normal}
   #ov span{opacity:.7;font-size:15px}
-  #bar{position:fixed;left:0;bottom:0;height:3px;background:#f21b0b;width:0}
+  #bar{position:fixed;left:0;bottom:0;height:3px;background:var(--accent);width:0}
 </style>
 </head>
 <body>
@@ -35,7 +36,7 @@ function rng(s){ return () => { s = (s*16807) % 2147483647; return (s-1)/2147483
 
 const BLK = '#0e0e0e', RED = '#f21b0b', WHT = '#ffffff';
 const cam = { x:0, y:-15, z:1 };
-let shake = 0, flashA = 0, flashC = '255,255,255', fadeA = 0;
+let shake = 0, flashA = 0, flashC = '255,255,255', fadeA = 0, hitstop = 0, zoomKick = 0;
 let parts = [];
 let si = 0, st = 0, prevSt = -1, started = false;
 
@@ -65,13 +66,17 @@ function tone(dur,f0,f1,vol,type){
   const g = AC.createGain(); g.gain.setValueAtTime(vol,t); g.gain.exponentialRampToValueAtTime(.001,t+dur);
   o.connect(g); g.connect(master); o.start(t); o.stop(t+dur);
 }
+let lastSnd = {};
 function snd(n, v){
   if (!AC) return; v = v ?? 1;
-  if (n==='hit'){ noise(.14,'bandpass',2600,500,.55*v); tone(.16,190,45,.6*v); }
+  const now = performance.now(); if (now - (lastSnd[n]||0) < 35) return; lastSnd[n] = now;
+  if (n==='hit'){ noise(.14,'bandpass',2600,500,.55*v); tone(.16,190+R()*60,45,.6*v); }
+  else if (n==='block'){ tone(.07,1400,500,.25*v,'square'); noise(.08,'highpass',2500,5000,.3*v); }
   else if (n==='boom'){ noise(1.5,'lowpass',1200,50,.95*v); tone(1.1,95,22,.9*v); }
-  else if (n==='whoosh'){ noise(.5,'bandpass',250,2800,.4*v); }
+  else if (n==='whoosh'){ noise(.32,'bandpass',300+R()*200,2600,.35*v); }
   else if (n==='zap'){ tone(.12,700+R()*900,180,.12*v,'sawtooth'); noise(.1,'highpass',3000,7000,.18*v); }
   else if (n==='rumble'){ noise(2.2,'lowpass',180,60,.5*v); }
+  else if (n==='thud'){ tone(.25,110,40,.6*v); noise(.3,'lowpass',600,80,.5*v); }
 }
 
 // ===================== parçacıklar & efektler =====================
@@ -97,6 +102,8 @@ function drawParts(){
       const r = p.r + p.life*p.sp;
       X.strokeStyle = `rgba(${p.col},${a})`; X.lineWidth = Math.max(.01,p.w*(1-k));
       X.beginPath(); X.ellipse(p.x,p.y,r,r*(p.fl||1),0,0,7); X.stroke();
+    } else if (p.t==='bolt'){
+      X.globalAlpha = a; bolt(p.x,p.y,p.x+p.ex,p.y+p.ey,p.r,'#fff','#bfe8ff'); X.globalAlpha = 1;
     }
   }
 }
@@ -108,7 +115,7 @@ function impact(x,y,sz,col){
     const a = R()*PI*2, v = sz*(18+R()*30);
     P_({t:'spark',x,y,vx:Math.cos(a)*v,vy:Math.sin(a)*v,max:.15+R()*.2,r:sz*.12,drag:4,col});
   }
-  flashA = Math.max(flashA, .1 + sz*.02); shake = Math.max(shake, sz*.45);
+  flashA = Math.max(flashA, .06 + sz*.015); shake = Math.max(shake, sz*.45);
 }
 function dustBurst(x,y,n,sz,col){
   for (let i=0;i<n;i++){
@@ -123,56 +130,94 @@ function bolt(x1,y1,x2,y2,w,col,glow,jag){
   for (let i=1;i<n;i++){ const t=i/n, o=(R()-.5)*L*(jag||.2); X.lineTo(x1+dx*t+nx*o, y1+dy*t+ny*o); }
   X.lineTo(x2,y2);
   X.lineCap = X.lineJoin = 'round';
-  X.shadowColor = glow; X.shadowBlur = 18; X.strokeStyle = glow; X.lineWidth = w*2.2; X.globalAlpha = .5; X.stroke();
-  X.globalAlpha = 1; X.strokeStyle = col; X.lineWidth = w; X.stroke(); X.shadowBlur = 0;
+  const ga = X.globalAlpha;
+  X.shadowColor = glow; X.shadowBlur = 18; X.strokeStyle = glow; X.lineWidth = w*2.2; X.globalAlpha = ga*.5; X.stroke();
+  X.globalAlpha = ga; X.strokeStyle = col; X.lineWidth = w; X.stroke(); X.shadowBlur = 0;
 }
 
 // ===================== çöp adam =====================
 // [gövde eğimi, ön kol üst, ön kol alt, arka kol üst, arka kol alt, ön bacak üst, ön bacak alt, arka bacak üst, arka bacak alt]
-// Açılar dünya açısı: 0 = aşağı, PI/2 = ileri (yüze doğru), PI = yukarı.
+// Açılar dünya açısı: 0 = aşağı, PI/2 = ileri (yüze doğru), PI = yukarı, -PI/2 = geri.
 const PO = {
-  stand : [0,   .15,.08, -.15,-.08,  .1,.05,  -.1,-.05],
-  stance: [.15, .9,2.4,   .4,2.0,    .55,.05, -.5,-.15],
-  punch : [.35, 1.6,1.6,  .1,2.2,    .8,.2,   -.7,-.25],
-  kick  : [-.35,.5,1.9,  -1.1,-.5,   1.75,1.7,-.1,-.05],
-  crouch: [.6,  .4,.2,   -.1,.2,     1.4,-.2,  .3,-.9],
-  run1  : [.4,  1.0,2.1, -.9,-.3,    .9,.1,   -.7,-1.9],
-  run2  : [.4, -.9,-.3,   1.0,2.1,  -.7,-1.9,  .9,.1],
-  walk1 : [.05, .4,.25,  -.4,-.3,    .35,.1,  -.35,-.55],
-  walk2 : [.05,-.4,-.3,   .4,.25,   -.35,-.55, .35,.1],
-  fly   : [1.45,1.65,1.6,-1.4,-1.5, -1.45,-1.5,-1.6,-1.65],
-  hurt  : [-.8, 2.6,2.2, -2.4,-2.9,  .9,.3,    .3,.9],
-  land  : [.7,  .4,.2,   -1.3,-1.8,  1.4,0,    .4,-1.4],
-  block : [0,   1.57,1.57,-1.57,-1.57,.45,.05,-.45,-.05],
-  guard : [-.1, 2.5,3.0,  2.1,3.0,   .5,.05,  -.5,-.1],
-  raise : [0,   3.0,3.1, -.25,-.1,   .15,.05, -.15,-.05],
-  burst : [0,   2.0,2.4, -2.0,-2.4,  .5,.15,  -.5,-.15],
-  fall  : [0,   2.6,2.9, -2.6,-2.9,  .2,.1,   -.2,-.1],
-  slam  : [.5,  .9,.3,   -.6,-.2,    .7,.1,   -.6,-.2],
+  stand   : [0,   .15,.08, -.15,-.08,  .1,.05,  -.1,-.05],
+  stance  : [.12, .75,2.35, .35,2.05,  .5,.02,  -.45,-.12],
+  stance2 : [.22, .85,2.45, .45,2.15,  .75,-.08,-.55,-.4],
+  jabW    : [.05, .55,2.55, .35,2.1,   .48,.02, -.45,-.12],
+  jab     : [.3,  1.6,1.57, .3,2.25,   .62,.1,  -.62,-.2],
+  crossW  : [0,   .7,2.5,   .1,2.3,    .45,.02, -.45,-.12],
+  cross   : [.45, .45,2.4,  1.62,1.57, .78,.15, -.78,-.35],
+  hookW   : [-.05,1.1,1.9,  .3,2.1,    .5,.02,  -.5,-.15],
+  hook    : [.3,  1.5,2.95, .25,2.1,   .62,.05, -.6,-.2],
+  upperW  : [.4,  .45,1.2,  .25,1.9,   .95,-.25,-.4,-.55],
+  upper   : [-.2, 2.0,3.0,  .2,2.0,    .4,.05,  -.35,-.1],
+  kickW   : [-.1, .7,2.3,  -.2,1.5,    1.65,.25,-.15,-.05],
+  kick    : [-.45,.4,1.9,  -1.0,-.4,   1.65,1.6,-.12,-.05],
+  roundW  : [.05, .9,2.4,  -.3,1.0,    1.95,.65,-.2,-.1],
+  highKick: [-.7, .1,1.2,  -1.2,-.8,   2.3,2.35,-.15,-.05],
+  knee    : [.25, 1.3,2.0,  .9,1.9,    2.05,.35,-.25,-.1],
+  elbow   : [.45, 1.75,-2.6,.3,2.1,    .7,.1,   -.7,-.3],
+  lowW    : [.2,  .85,2.45, .45,2.15,  .8,-.1,  -.5,-.3],
+  lowKick : [.3,  .9,2.4,   .4,2.0,    1.25,1.3,-.3,-.4],
+  turn    : [.25, .3,1.0,  -.3,.5,     .15,-.05,-.2,-.2],
+  backKick: [.6,  .6,1.1,  -.3,.3,    -1.62,-1.58,.1,.05],
+  jump    : [.1,  1.2,2.4,  .6,2.0,    1.9,.2,   1.3,-.4],
+  airKick : [-.6, .6,1.8,  -1.2,-.6,   1.72,1.68,.9,-.6],
+  land    : [.7,  .4,.2,   -1.3,-1.8,  1.4,0,    .4,-1.4],
+  block   : [-.05,1.25,2.9, 1.05,2.8,  .45,0,   -.55,-.2],
+  blockLow: [.35, .6,1.5,   .4,1.3,    .65,0,   -.5,-.25],
+  duck    : [.55, .8,2.6,   .45,2.3,   1.5,-.1,  .2,-1.2],
+  lean    : [-.5, .6,2.2,  -.2,1.6,    .6,.05,  -.3,-.05],
+  headHit : [-.5, .3,1.1,  -.7,-.4,    .45,0,   -.6,-.25],
+  gutHit  : [.8,  .25,.6,  -.1,.25,    .35,0,   -.5,-.2],
+  lowHit  : [.3,  1.0,2.0, -.5,.5,     .2,-.4,  -.5,-.2],
+  hurtAir : [-.8, 2.6,2.2, -2.4,-2.9,  .9,.3,    .3,.9],
+  lie     : [-1.5,-1.9,-2.2,-1.5,-1.2, 1.45,1.5, 1.35,1.6],
+  kneel   : [.3,  .5,.25,  -.3,.1,     1.5,-.05, .45,-1.5],
+  grab    : [.3,  1.4,1.5,  1.3,1.4,   .6,.1,   -.6,-.2],
+  throwP  : [-.4, 2.6,2.9,  2.4,2.8,   .4,0,    -.7,-.3],
+  crouch  : [.6,  .4,.2,   -.1,.2,     1.4,-.2,  .3,-.9],
+  run1    : [.4,  1.0,2.1, -.9,-.3,    .9,.1,   -.7,-1.9],
+  run2    : [.4, -.9,-.3,   1.0,2.1,  -.7,-1.9,  .9,.1],
+  walk1   : [.05, .4,.25,  -.4,-.3,    .35,.1,  -.35,-.55],
+  walk2   : [.05,-.4,-.3,   .4,.25,   -.35,-.55, .35,.1],
+  fly     : [1.45,1.65,1.6,-1.4,-1.5, -1.45,-1.5,-1.6,-1.65],
+  raise   : [0,   3.0,3.1, -.25,-.1,   .15,.05, -.15,-.05],
+  burst   : [0,   2.0,2.4, -2.0,-2.4,  .5,.15,  -.5,-.15],
+  fall    : [0,   2.6,2.9, -2.6,-2.9,  .2,.1,   -.2,-.1],
+  slam    : [.5,  .9,.3,   -.6,-.2,    .7,.1,   -.6,-.2],
+  guard   : [-.1, 2.5,3.0,  2.1,3.0,   .5,.05,  -.5,-.1],
 };
+PO.hurt = PO.hurtAir; PO.punch = PO.jab;
 const mix = (a,b,t) => a.map((v,i) => lerp(v,b[i],t));
 const walkPose = (t,sp,A,B) => mix(A||PO.walk1, B||PO.walk2, .5+.5*Math.sin(t*sp));
 
-function fig(o){
+// eklem noktalarını hesapla (çizmeden)
+function figPts(o){
   const p = o.pose, s = o.s||10, f = o.f||1, sp = (o.spin||0)*f;
   const d = (a,l) => [Math.sin(a+sp)*l*f, Math.cos(a+sp)*l];
-  const T=s*1.0, UA=s*.48, FA=s*.48, TH=s*.58, SH=s*.6, HR=s*.34;
-  const tor = d(PI-p[0],T);
+  const T=s, UA=s*.48, FA=s*.48, TH=s*.58, SH=s*.6, HR=s*.34;
+  const tor = d(PI-p[0],T), hd = d(PI-p[0],T+HR*.92);
+  const e1=d(p[1],UA), h1=d(p[2],FA), e2=d(p[3],UA), h2=d(p[4],FA);
   const k1=d(p[5],TH), f1=d(p[6],SH), k2=d(p[7],TH), f2=d(p[8],SH);
   let hx = o.x, hy = o.y;
-  if (o.g != null) hy = o.g - Math.max(k1[1]+f1[1], k2[1]+f2[1]) - s*.085;
-  const nx = hx+tor[0], ny = hy+tor[1];
-  const hd = d(PI-p[0],T+HR*.92), cx = hx+hd[0], cy = hy+hd[1];
-  const e1=d(p[1],UA), h1=d(p[2],FA), e2=d(p[3],UA), h2=d(p[4],FA);
+  if (o.g != null) hy = o.g - Math.max(k1[1]+f1[1], k2[1]+f2[1]) - s*.085 - (o.h||0);
+  const N = [hx+tor[0], hy+tor[1]];
+  const P = { hip:[hx,hy], neck:N, head:[hx+hd[0],hy+hd[1]],
+    fe:[N[0]+e1[0],N[1]+e1[1]], be:[N[0]+e2[0],N[1]+e2[1]], fk:[hx+k1[0],hy+k1[1]], bk:[hx+k2[0],hy+k2[1]] };
+  P.fh = [P.fe[0]+h1[0],P.fe[1]+h1[1]]; P.bh = [P.be[0]+h2[0],P.be[1]+h2[1]];
+  P.ff = [P.fk[0]+f1[0],P.fk[1]+f1[1]]; P.bf = [P.bk[0]+f2[0],P.bk[1]+f2[1]];
+  P.hand = P.fh; P.foot = P.ff; P.s = s; P.f = f; P.HR = HR;
+  return P;
+}
+function fig(o){
+  const P = figPts(o), s = P.s, f = P.f, HR = P.HR, [cx,cy] = P.head;
   X.save(); X.globalAlpha = o.alpha ?? 1;
-  X.strokeStyle = X.fillStyle = o.c; X.lineWidth = s*.17; X.lineCap = X.lineJoin = 'round';
-  X.beginPath();
-  X.moveTo(nx,ny); X.lineTo(nx+e2[0],ny+e2[1]); X.lineTo(nx+e2[0]+h2[0],ny+e2[1]+h2[1]);
-  X.moveTo(hx,hy); X.lineTo(hx+k2[0],hy+k2[1]); X.lineTo(hx+k2[0]+f2[0],hy+k2[1]+f2[1]);
-  X.moveTo(hx,hy); X.lineTo(nx,ny);
-  X.moveTo(hx,hy); X.lineTo(hx+k1[0],hy+k1[1]); X.lineTo(hx+k1[0]+f1[0],hy+k1[1]+f1[1]);
-  X.moveTo(nx,ny); X.lineTo(nx+e1[0],ny+e1[1]); X.lineTo(nx+e1[0]+h1[0],ny+e1[1]+h1[1]);
-  X.stroke();
+  X.lineCap = X.lineJoin = 'round';
+  const L = (...pts) => { X.moveTo(pts[0][0],pts[0][1]); for (let i=1;i<pts.length;i++) X.lineTo(pts[i][0],pts[i][1]); };
+  const body = () => { X.beginPath(); L(P.neck,P.be,P.bh); L(P.hip,P.bk,P.bf); L(P.hip,P.neck); L(P.hip,P.fk,P.ff); L(P.neck,P.fe,P.fh); };
+  if (o.rim){ X.strokeStyle = X.fillStyle = o.rim; X.lineWidth = s*.27; body(); X.stroke(); X.beginPath(); X.arc(cx,cy,HR+s*.05,0,7); X.fill(); }
+  X.strokeStyle = X.fillStyle = o.c; X.lineWidth = s*.17;
+  body(); X.stroke();
   X.beginPath(); X.arc(cx,cy,HR,0,7); X.fill();
   if (o.c !== WHT && o.eyes !== false){
     const ox = o.front ? 0 : f*HR*.3, gap = HR*.3, ry = Math.max(HR*.04, HR*.3*(1-(o.blink||0))), rx = HR*.14;
@@ -180,9 +225,235 @@ function fig(o){
     X.beginPath(); X.ellipse(cx+ox-gap,cy-HR*.05,rx,ry,0,0,7); X.ellipse(cx+ox+gap,cy-HR*.05,rx,ry,0,0,7); X.fill();
   }
   X.restore();
-  return { hand:[nx+e1[0]+h1[0], ny+e1[1]+h1[1]], foot:[hx+k1[0]+f1[0], hy+k1[1]+f1[1]], head:[cx,cy], hip:[hx,hy], neck:[nx,ny] };
+  return P;
 }
 function ghosts(fn, t, n, gap){ for (let i=n;i>=1;i--){ const o = fn(t-i*(gap||.025)); if (o){ o.alpha = .12*(n-i+1)/n; fig(o); } } }
+
+// ===================== dövüş motoru =====================
+// Her dövüşçü bir anahtar kare izine sahip. Kareler arası Hermite (Catmull-Rom) eğrisiyle
+// yumuşak geçilir; kol ve bacak uçları gövdeden biraz geride gelir (kamçı etkisi).
+const TEN = .9;
+class Fx {
+  constructor(c, x, f, o){
+    o = o || {}; this.c = c; this.s = o.s || 10; this.ground = o.ground !== false; this.baseY = o.baseY || 0;
+    this.ph = (x*7.13) % 6; this.k = []; this.busy = -1; this.camFrom = null; this.camUntil = null;
+    this.key(0, o.pose || PO.stance, x, 0, 0, f);
+  }
+  key(t, p, x, h, sp, f){
+    if (typeof p === 'string') p = PO[p];
+    const L = this.k[this.k.length-1];
+    this.k.push({ t, v:[...p, x, h||0, sp ?? (L ? L.v[11] : 0)], f: f ?? (L ? L.f : 1) });
+    return this;
+  }
+  ev(t){
+    const k = this.k, n = k.length;
+    if (n === 1 || t <= k[0].t) return k[0];
+    if (t >= k[n-1].t) return k[n-1];
+    let lo = 0, hi = n-1; while (hi-lo > 1){ const m = (lo+hi) >> 1; if (k[m].t <= t) lo = m; else hi = m; }
+    const a = k[lo], b = k[lo+1], h = b.t-a.t, s = (t-a.t)/h, s2 = s*s, s3 = s2*s;
+    const h00 = 2*s3-3*s2+1, h10 = s3-2*s2+s, h01 = -2*s3+3*s2, h11 = s3-s2;
+    const p = k[lo-1], q = k[lo+2], v = new Array(12);
+    for (let i=0;i<12;i++){
+      const ma = p ? (b.v[i]-p.v[i])/(b.t-p.t)*TEN : 0, mb = q ? (q.v[i]-a.v[i])/(q.t-a.t)*TEN : 0;
+      v[i] = h00*a.v[i] + h10*h*ma + h01*b.v[i] + h11*h*mb;
+    }
+    return { v, f:a.f };
+  }
+  cut(t){ const s = this.ev(t); this.k = this.k.filter(k => k.t < t-1e-4); this.k.push({ t, v:s.v.slice(), f:s.f }); }
+  end(){ return this.k[this.k.length-1]; }
+}
+// bir dövüşçünün t anındaki çizim nesnesi (gecikmeli uzuvlar + nefes/zıplama)
+function fo(F, t){
+  const a = F.ev(t), u = F.ev(t-.012), l = F.ev(t-.03), q = F.ev(t-.07);
+  const p = a.v.slice(0,9);
+  if (u.f === a.f){ p[1]=u.v[1]; p[3]=u.v[3]; p[5]=u.v[5]; p[7]=u.v[7]; }
+  if (l.f === a.f){ p[2]=l.v[2]; p[4]=l.v[4]; p[6]=l.v[6]; p[8]=l.v[8]; }
+  let mv = 0; for (let i=0;i<9;i++) mv += Math.abs(a.v[i]-q.v[i]); mv += Math.abs(a.v[9]-q.v[9])*.15;
+  const idle = clamp(1-mv*1.2,0,1), ph = t*7.5+F.ph;
+  p[0] += idle*Math.sin(ph)*.03; p[2] += idle*Math.sin(ph+.6)*.1; p[4] += idle*Math.sin(ph+1.2)*.1;
+  if (F.ground){
+    const h = Math.max(0,a.v[10]) + idle*(.25+.25*Math.sin(ph*2));
+    return { x:a.v[9], g:0, h, f:a.f, s:F.s, c:F.c, pose:p, spin:a.v[11], rim:F.rim };
+  }
+  return { x:a.v[9], y:F.baseY - a.v[10] - idle*Math.sin(ph*.4)*.8, f:a.f, s:F.s, c:F.c, pose:p, spin:a.v[11], rim:F.rim };
+}
+const LIMBS = ['fh','bh','ff','bf'];
+function drawF(F, t){
+  const s = F.s;
+  // hızlı vücut hareketinde art görüntü
+  const vx = Math.abs(F.ev(t).v[9] - F.ev(t-.05).v[9]) + Math.abs(F.ev(t).v[10] - F.ev(t-.05).v[10]);
+  if (vx > s*.55){ for (let i=3;i>=1;i--){ const o = fo(F,t-i*.03); o.alpha = .1*(4-i); fig(o); } }
+  // uzuv izleri (smear)
+  const S = []; for (let i=0;i<7;i++) S.push(figPts(fo(F,t-i*.011)));
+  X.lineCap = 'round';
+  for (const L of LIMBS){
+    let len = 0; for (let i=1;i<7;i++) len += Math.hypot(S[i][L][0]-S[i-1][L][0], S[i][L][1]-S[i-1][L][1]);
+    if (len < s*1.6) continue;
+    const k = clamp((len-s*1.6)/(s*2),0,1);
+    X.strokeStyle = F.c;
+    for (let i=0;i<6;i++){
+      X.globalAlpha = .45*(1-i/6)*k; X.lineWidth = s*.17*(1-i/7);
+      X.beginPath(); X.moveTo(S[i][L][0],S[i][L][1]); X.lineTo(S[i+1][L][0],S[i+1][L][1]); X.stroke();
+    }
+    X.globalAlpha = 1;
+  }
+  return fig(fo(F,t));
+}
+const jointsAt = (F,t) => figPts(fo(F,t));
+
+// Hareketler: k = [süre, poz, ileri kayma, yükseklik, dönüş(1 = yüzünü çevir)], hit = temas karesi
+const MV = {
+  jab  : { k:[[.08,'jabW',.3],[.06,'jab',1.6],[.18,'stance',-1.2]], hit:1, limb:'fh', lvl:'head', r:15, pow:2.2 },
+  cross: { k:[[.09,'crossW',.2],[.07,'cross',2.4],[.22,'stance',-1.8]], hit:1, limb:'bh', lvl:'head', r:16.5, pow:3 },
+  hook : { k:[[.11,'hookW',.3],[.08,'hook',1.4],[.22,'stance',-1]], hit:1, limb:'fh', lvl:'head', r:11.5, pow:3 },
+  upper: { k:[[.13,'upperW',.8],[.08,'upper',1.2,1],[.26,'stance',-1.4,0]], hit:1, limb:'fh', lvl:'chin', r:7, pow:4.5 },
+  knee : { k:[[.1,'stance',1.2],[.08,'knee',1.8,.5],[.2,'stance',-1.8,0]], hit:1, limb:'fk', lvl:'gut', r:7, pow:3.2 },
+  elbow: { k:[[.09,'hookW',.8],[.07,'elbow',1.6],[.2,'stance',-1.6]], hit:1, limb:'fe', lvl:'head', r:10, pow:3.2 },
+  front: { k:[[.11,'kickW',.3],[.07,'kick',1.3],[.1,'kickW',-.3],[.16,'stance',-1]], hit:1, limb:'ff', lvl:'gut', r:12.5, pow:3.6 },
+  high : { k:[[.12,'roundW',.3],[.08,'highKick',.8],[.12,'roundW',0],[.18,'stance',-1]], hit:1, limb:'ff', lvl:'head', r:9.5, pow:4 },
+  low  : { k:[[.08,'lowW',.3],[.07,'lowKick',.8],[.16,'stance',-.8]], hit:1, limb:'ff', lvl:'low', r:12, pow:2.2 },
+  spin : { k:[[.1,'turn',.6,0,1],[.08,'backKick',1.6],[.1,'turn',-.4,0,1],[.18,'stance',-1]], hit:1, limb:'ff', lvl:'big', r:12.5, pow:5.5 },
+  fly  : { k:[[.12,'jump',2,4],[.12,'airKick',6,5],[.12,'airKick',2,2],[.16,'land',1,0],[.22,'stance',0]], hit:1, limb:'ff', lvl:'big', r:12.5, pow:6 },
+  super: { k:[[.2,'crossW',-.5],[.08,'cross',3],[.3,'cross',.5],[.25,'stance',-1.5]], hit:1, limb:'bh', lvl:'big', r:16.5, pow:6 },
+  throw: { k:[[.1,'grab',1],[.14,'throwP',.3],[.3,'stance',-.5]], hit:0, limb:'fh', lvl:'throw', r:12, pow:1.5 },
+};
+// Tepkiler: pre = temasdan ne kadar önce başlar, k = [süre, poz, geri(-)/ileri(+) kayma, yükseklik, ek dönüş], thud = yere çarpma karesi
+const REACT = {
+  head    : { pre:0,   imp:'hit',   k:[[.05,'headHit',-2.8],[.12,'headHit',-.8],[.22,'stance',-.5]] },
+  gut     : { pre:0,   imp:'hit',   k:[[.05,'gutHit',-2.6],[.15,'gutHit',-.8],[.25,'stance',-.4]] },
+  low     : { pre:0,   imp:'hit',   k:[[.05,'lowHit',-1.2],[.22,'stance',-.8]] },
+  chin    : { pre:0,   imp:'hit',   k:[[.06,'hurtAir',-2,4,-.4],[.28,'hurtAir',-4,7,-.8],[.22,'land',-2,0,0],[.3,'stance',-.3,0,0]], busy:true },
+  knock   : { pre:0,   imp:'big',   k:[[.05,'hurtAir',-3,3],[.35,'hurtAir',-14,5],[.18,'lie',-6,2.2],[.3,'lie',-1.5,2.2],[.3,'kneel',0,0],[.3,'stance',0,0]], thud:2, busy:true },
+  down    : { pre:0,   imp:'big',   k:[[.05,'hurtAir',-3,3],[.35,'hurtAir',-16,5],[.18,'lie',-6,2.2],[.6,'lie',-2,2.2]], thud:2, busy:true },
+  block   : { pre:.07, imp:'block', k:[[.07,'block',0],[.06,'block',-2.2],[.2,'stance',-.6]] },
+  blockLow: { pre:.07, imp:'block', k:[[.07,'blockLow',0],[.06,'blockLow',-1],[.2,'stance',-.2]] },
+  skid    : { pre:.07, imp:'block', k:[[.07,'block',0],[.08,'blockLow',-4],[.3,'stance2',-3],[.2,'stance',0]] },
+  duck    : { pre:.1,  imp:'miss',  k:[[.1,'duck',-.2],[.2,'duck',0],[.16,'stance',0]] },
+  lean    : { pre:.1,  imp:'miss',  k:[[.1,'lean',-1.2],[.18,'lean',0],[.15,'stance',.6]] },
+  hop     : { pre:.1,  imp:'miss',  k:[[.1,'jump',-.5,3],[.12,'jump',-.5,4],[.12,'land',0,0],[.16,'stance',0]] },
+  thrown  : { pre:0,   imp:'grab',  k:[[.1,'hurtAir',4,7,-1.5],[.14,'hurtAir',11,9,-3.5],[.12,'lie',16,2.2,-6.283],[.35,'lie',16.5,2.2,-6.283],[.3,'kneel',16.5,0,-6.283],[.3,'stance',16.5,0,-6.283]], thud:2, busy:true },
+  knockAir: { pre:0,   imp:'big',   k:[[.05,'hurtAir',-3,1,-.5],[.5,'hurtAir',-16,4,-2],[.4,'stance',-2,3,-6.283]], busy:true },
+  meteor  : { pre:0,   imp:'big',   k:[[.06,'hurtAir',-4,-2,-.5],[1.6,'hurtAir',-80,-55,-7]], busy:true },
+};
+const MW = { jab:3, cross:2.5, hook:2, upper:1.1, knee:1.2, elbow:1.2, front:1.6, high:1.5, low:1.3, spin:.8, fly:.6, super:.45, throw:.6 };
+const RW = { head:{head:4,block:3,lean:1.5,duck:1.5}, gut:{gut:4,block:2.5}, low:{low:3,hop:1.5,blockLow:2},
+             chin:{chin:2,lean:1,block:1.5}, big:{knock:2.2,skid:1.5}, throw:{thrown:1} };
+function wpick(obj, r){ let s = 0; for (const k in obj) s += obj[k]; let x = r()*s; for (const k in obj){ x -= obj[k]; if (x <= 0) return k; } return Object.keys(obj)[0]; }
+
+let EV = [];  // sahnenin temas olayları
+function ex(t, A, B, mv, rc){
+  const M = MV[mv], RC = REACT[rc];
+  A.cut(t);
+  const a = A.ev(t); let ax = a.v[9];
+  let tw = 0; for (let i=0;i<=M.hit;i++) tw += M.k[i][0];
+  const bx = B.ev(t+tw).v[9], fA = bx >= ax ? 1 : -1;
+  let cum = 0; for (let i=0;i<=M.hit;i++) cum += M.k[i][2];
+  let ext = ((bx - fA*(M.r+2)) - (ax + fA*cum)) * fA;     // + : yaklaşmak gerek
+  A.end().f = fA;
+  let tt = t, x = ax;
+  if (ext > 5){                                        // koşarak yaklaş
+    const dist = ext-1.5, dur = Math.max(.14, dist/75), n = Math.max(2, Math.round(dur/.07));
+    for (let i=1;i<=n;i++) A.key(t+dur*i/n, i%2 ? 'run1' : 'run2', ax+fA*dist*i/n, 0, null, fA);
+    tt = t+dur; x = ax+fA*dist; ext = 1.5;
+  }
+  if (ext < -2.5){                                     // çok yakın: önce geri sıçra
+    const back = -ext, dur = .1+back*.012;
+    A.key(t+dur*.5,'stance2',ax-fA*back*.6,1,null,fA); A.key(t+dur,'stance2',ax-fA*back,0,null,fA);
+    tt = t+dur; x = ax-fA*back; ext = 0;
+  }
+  ext = clamp(ext,-2.5,5);
+  const sp0 = A.end().v[11];
+  let f = fA, tc = 0;
+  M.k.forEach((k,i) => {
+    tt += k[0]; x += fA*(k[2] + (i===0 ? ext : 0)); if (k[4]) f = -f;
+    A.key(tt, k[1], x, k[3]||0, sp0, f);
+    if (i === M.hit) tc = tt;
+  });
+  // savunan
+  const ts = tc - RC.pre; B.cut(ts); const fB = -fA; B.end().f = fB;
+  const b0 = B.end().v; let bxx = b0[9], t2 = ts; const bsp = b0[11];
+  RC.k.forEach((k,i) => {
+    t2 += k[0]; bxx += fB*k[2];
+    B.key(t2, k[1], bxx, k[3]||0, bsp+(k[4]||0), fB);
+    if (RC.thud === i) EV.push({ t:t2, A:B, limb:'hip', imp:'thud', pow:3 });
+  });
+  B.busy = RC.busy ? t2 : -1;
+  EV.push({ t:tc, A, B, limb:M.limb, pow:M.pow, imp:RC.imp });
+  return { tc, end:tt, rend:t2 };
+}
+function shuffle(A, B, t, r){
+  A.cut(t); B.cut(t);
+  const a = A.end(), b = B.end(), fA = b.v[9] >= a.v[9] ? 1 : -1;
+  const d1 = (r()-.5)*4, d2 = (r()-.5)*4;
+  A.key(t+.22,'stance2',a.v[9]+fA*d1,0,null,fA); A.key(t+.5,'stance',a.v[9]+fA*(d1-1),0,null,fA);
+  B.key(t+.25,'stance2',b.v[9]-fA*d2,0,null,-fA); B.key(t+.52,'stance',b.v[9]-fA*(d2-1),0,null,-fA);
+}
+// rastgele ama tekrarsız dövüş koreografisi
+function choreo(F, t0, t1, seed, o){
+  o = o || {}; const r = rng(seed); let t = t0, ai = 0, streak = 0, last = [];
+  const mw = Object.assign({}, MW, o.mw || {});
+  if (o.space){ delete mw.low; delete mw.fly; delete mw.throw; }
+  while (t < t1){
+    let A, B;
+    if (F.length === 2){ A = F[ai]; B = F[1-ai]; }
+    else { const i = Math.floor(r()*F.length); A = F[i]; B = F[(i+1+Math.floor(r()*(F.length-1)))%F.length]; }
+    const wait = Math.max(A.busy, B.busy); if (wait > t){ t = wait-.15; if (t >= t1) break; }
+    if (streak === 0 && r() < (o.pause ?? .1)){ shuffle(A,B,t,r); t += .5+r()*.3; continue; }
+    let mv, g = 0; do { mv = wpick(mw,r); g++; } while (last.includes(mv) && g < 30);
+    last = [mv, ...last].slice(0,3);
+    const rw = Object.assign({}, RW[MV[mv].lvl]);
+    if (o.space){ if (rw.knock){ rw.knockAir = rw.knock; delete rw.knock; } delete rw.hop; }
+    const rc = wpick(rw, r);
+    const res = ex(t, A, B, mv, rc);
+    if (REACT[rc].busy){ streak = 0; if (r() < .5) ai = 1-ai; t = Math.max(res.end, res.rend-.25); continue; }
+    const blocked = REACT[rc].imp === 'block', missed = REACT[rc].imp === 'miss';
+    if ((blocked || missed) && r() < .55){ ai = 1-ai; streak = 0; t = res.tc+.08+r()*.08; continue; }   // karşı atak
+    if (streak < 2+Math.floor(r()*2) && r() < .7){ streak++; t = res.tc+(o.gap ?? .06)+r()*.1; }
+    else { streak = 0; ai = 1-ai; t = res.end-.05+r()*.15; }
+  }
+  return t;
+}
+function hitFx(e, o){
+  const p = jointsAt(e.A, e.t)[e.limb];
+  const col = o.col ? o.col(e) : '255,255,255';
+  if (e.imp === 'miss'){ snd('whoosh',.6); return; }
+  if (e.imp === 'thud'){ dustBurst(p[0],0,25,3.5,o.dust); snd('thud'); shake = Math.max(shake,2.5); return; }
+  if (e.imp === 'grab'){ snd('whoosh',.8); impact(p[0],p[1],1.5,col); return; }
+  if (e.imp === 'block'){ impact(p[0],p[1],e.pow*.55,col); snd('block'); hitstop = .035; }
+  else if (e.imp === 'big'){ impact(p[0],p[1],e.pow*1.3,col); snd('boom',.75); hitstop = .13; flashA = Math.max(flashA,.3); zoomKick = .3;
+    P_({t:'ring',x:p[0],y:p[1],r:2,sp:120,w:1.5,max:.45,col}); }
+  else { impact(p[0],p[1],e.pow,col); snd('hit'); hitstop = .06; zoomKick = Math.max(zoomKick,.1); }
+  if (o.zap && e.A.c === WHT) for (let i=0;i<4;i++){ const a = R()*PI*2, L = 5+R()*10;
+    P_({t:'bolt',x:p[0],y:p[1],ex:Math.cos(a)*L,ey:Math.sin(a)*L,r:.35,max:.15}); }
+}
+function fightCam(F, t, dt, o, first){
+  let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9;
+  for (const f of F){
+    if (f.camFrom != null && t < f.camFrom) continue; if (f.camUntil != null && t > f.camUntil) continue;
+    const P = jointsAt(f,t); x0 = Math.min(x0,P.hip[0]); x1 = Math.max(x1,P.hip[0]); y0 = Math.min(y0,P.head[1]); y1 = Math.max(y1,P.hip[1]+8);
+  }
+  if (x0 > x1) return;
+  const tx = (x0+x1)/2, ty = (y0+y1)/2-1, span = Math.max((x1-x0)+30, ((y1-y0)+20)*1.6);
+  const tz = clamp((o.zw||85)/span, .6, 2.1) + zoomKick;
+  if (first){ cam.x = tx; cam.y = ty; cam.z = tz; return; }
+  const k = 1-Math.exp(-dt*(o.cs||3.5));
+  cam.x += (tx-cam.x)*k; cam.y += (ty-cam.y)*k; cam.z += (tz-cam.z)*k*1.4;
+}
+function fightScene(d, th, build, o){
+  o = o || {};
+  return {
+    d,
+    init(){ EV = []; this.F = build(this); this.E = EV; this.first = true; },
+    f(t, dt){
+      fightCam(this.F, t, dt, o, this.first); this.first = false;
+      begin(th);
+      if (o.pre) o.pre.call(this, t, dt);
+      for (const F of this.F) drawF(F, t);
+      for (const e of this.E) if (at(e.t)) hitFx(e, o);
+      if (o.post) o.post.call(this, t, dt);
+    }
+  };
+}
 
 // ===================== arka plan & kamera =====================
 const TH = {
@@ -202,13 +473,11 @@ function drawBG(th){
   X.fillStyle = g; X.fillRect(0,0,W,hz+1);
   g = X.createLinearGradient(0,hz,0,H); g.addColorStop(0,T.g1); g.addColorStop(1,T.g2);
   X.fillStyle = g; X.fillRect(0,hz,W,H-hz);
-  // bulutlar
   X.fillStyle = T.cloud;
   for (const c of CLOUDS){
     const span = W*1.6, sx = mod(c.x*span - cam.x*k0*.08, span) - W*.3, sy = hz - c.y*hz*.6, w = c.w*k0;
     X.beginPath(); X.ellipse(sx,sy,w,w*.16,0,0,7); X.ellipse(sx+w*.4,sy-w*.08,w*.45,w*.14,0,0,7); X.ellipse(sx-w*.5,sy+w*.02,w*.4,w*.1,0,0,7); X.fill();
   }
-  // kayalar
   X.fillStyle = T.rock; const span = 1000*k0*.5;
   for (const r of ROCKS){
     const sx = mod(r.x*k0*.5 - cam.x*k0*.22, span) - k0*15; if (sx > W+40) continue;
@@ -218,7 +487,6 @@ function drawBG(th){
     else { X.moveTo(sx,hz+1); X.lineTo(sx+w*.15,hz-h); X.lineTo(sx+w*.7,hz-h*.9); X.lineTo(sx+w,hz+1); }
     X.fill();
   }
-  // yer çizgileri
   X.strokeStyle = th==='light' ? 'rgba(0,0,0,.06)' : 'rgba(0,0,0,.18)'; X.lineWidth = 1;
   for (let i=0;i<6;i++){ const y = hz + (H-hz)*(.15+i*.15), x0 = mod(i*337 - cam.x*k0*(.3+i*.15), W*1.4) - W*.2;
     X.beginPath(); X.moveTo(x0,y); X.lineTo(x0+W*.18,y+2); X.stroke(); }
@@ -228,8 +496,15 @@ function drawSpace(t){
   for (const s of STARS){
     const a = .4 + .6*Math.abs(Math.sin(t*1.5+s[3]));
     X.fillStyle = s[4] ? `rgba(120,255,170,${a})` : `rgba(255,255,255,${a})`;
-    X.fillRect(mod(s[0]*W - t*6, W), s[1]*H, s[2], s[2]);
+    X.fillRect(mod(s[0]*W - t*6 - cam.x*2, W), mod(s[1]*H - cam.y*2, H), s[2], s[2]);
   }
+  const pr = Math.max(W,H)*1.15, pcx = -pr*.55 + t*4, pcy = H*.55 + pr*.45;
+  const g = X.createRadialGradient(pcx,pcy,pr*.8,pcx,pcy,pr*1.08);
+  g.addColorStop(0,'rgba(20,90,120,0)'); g.addColorStop(.72,'rgba(40,150,190,.25)'); g.addColorStop(.74,'rgba(150,230,255,.9)'); g.addColorStop(.76,'rgba(60,170,210,.35)'); g.addColorStop(1,'rgba(20,90,120,0)');
+  X.fillStyle = '#071820'; X.beginPath(); X.arc(pcx,pcy,pr*.98,0,7); X.fill();
+  X.fillStyle = g; X.beginPath(); X.arc(pcx,pcy,pr*1.08,0,7); X.fill();
+  X.strokeStyle = 'rgba(210,245,255,.95)'; X.lineWidth = 2.5; X.shadowColor = '#7fdcff'; X.shadowBlur = 25;
+  X.beginPath(); X.arc(pcx,pcy,pr*.98,0,7); X.stroke(); X.shadowBlur = 0;
 }
 function applyCam(){
   const k = H/100*cam.z, sx = (R()-.5)*shake*H/100, sy = (R()-.5)*shake*H/100;
@@ -253,7 +528,8 @@ SC.push({ d:6, f(t,dt){
     X.strokeStyle = `rgba(235,235,235,${.1+.3*clamp(t/3,0,1)})`; X.lineWidth = .3+.1*i; X.stroke();
   }
   if (R() < dt*45){ const a = R()*PI*2, r = 32; P_({t:'spark',x:Math.cos(a)*r,y:-9+Math.sin(a)*r*.6,vx:-Math.cos(a)*45,vy:-Math.sin(a)*27,max:.6,r:.3,col:'225,225,225'}); }
-  fig({ x:Math.sin(t*55)*.012*t*t, g:0, f:1, s:10, c:BLK, pose:PO.crouch });
+  const br = Math.sin(t*2.5)*.06;
+  fig({ x:Math.sin(t*55)*.012*t*t, g:0, f:1, s:10, c:BLK, pose:mix(PO.crouch, PO.land, .3+br) });
   if (t > 1.5){ const p = .5+.5*Math.sin(t*9); X.fillStyle = `rgba(255,30,10,${p})`; X.beginPath(); X.arc(-30,-34,.55,0,7); X.fill(); }
   if (at(1)) snd('rumble',.7);
   if (at(5.55)){ flashA = 1; snd('boom'); }
@@ -264,58 +540,37 @@ SC.push({ d:6.5, f(t){
   const land = .8;
   const rp = t<land ? PO.fall : t<2.3 ? PO.land : mix(PO.land,PO.stance,eio(seg(2.3,2.9)));
   const bp = mix(PO.crouch,PO.stance,eio(seg(1.4,2.1)));
+  const breathe = q => q.map((v,i) => v + (i===2||i===4 ? Math.sin(t*6+i)*.06 : 0));
   if (t < 3.2){ cam.x = lerp(8,4,t/3.2); cam.y = -16; cam.z = 1.3; }
   else { const q = eio(seg(3.2,3.8)); cam.x = lerp(4,3,q); cam.y = lerp(-16,-23,q); cam.z = lerp(1.3,3.1,q); }
   begin('dark');
   const bl = t>5.2 ? eio(seg(5.2,5.6))*.65 : 0;
-  fig({ x:-14, g:0, f:1, s:10, c:BLK, pose:bp, blink:bl });
+  fig({ x:-14, g:0, h:t>2.1?.2+.2*Math.sin(t*7):0, f:1, s:10, c:BLK, pose:breathe(bp), blink:bl });
   if (t < land){
     const ry = lerp(-140,0,ei(t/land));
     X.strokeStyle = 'rgba(242,27,11,.35)'; X.lineWidth = 1.6; X.beginPath(); X.moveTo(20,ry-160); X.lineTo(20,ry-20); X.stroke();
     fig({ x:20, y:ry-11, f:-1, s:10, c:RED, pose:rp });
-  } else fig({ x:20, g:0, f:-1, s:10, c:RED, pose:rp, blink:bl });
+  } else fig({ x:20, g:0, h:t>2.9?.2+.2*Math.sin(t*7+1):0, f:-1, s:10, c:RED, pose:breathe(rp), blink:bl });
   if (at(land)){ impact(20,-1,5); dustBurst(20,0,40,4); shake = 4; snd('boom'); P_({t:'ring',x:20,y:0,r:2,sp:90,w:1.5,max:.5,fl:.18,col:'220,220,220'}); }
   if (at(2.2)) snd('whoosh',.4);
 }});
 
-// 3 — yakın dövüş
-SC.push({ d:7.2, f(t,dt){
-  const st3 = t => {
-    let bx, rx, bp, rp, by = null, fb = 1;
-    if (t < .55){ const q = ei(clamp(t/.55,0,1)); bx = lerp(-14,-5,q); rx = lerp(20,5,q);
-      const ph = Math.floor(t*14)%2; bp = ph?PO.run1:PO.run2; rp = ph?PO.run2:PO.run1; }
-    else if (t < 4.6){ const b = Math.floor((t-.55)/.32), lt = ((t-.55)%.32)/.32, atkB = b%2===0;
-      const hit = b%3===2 ? PO.kick : PO.punch, w = Math.sin(b*1.7)*3;
-      bx = -5+w; rx = 5+w; const sk = lt<.35 ? eo(lt/.35) : 1-eio((lt-.35)/.65)*.7;
-      bp = atkB ? mix(PO.stance,hit,sk) : mix(PO.stance,PO.guard,sk);
-      rp = atkB ? mix(PO.stance,PO.guard,sk) : mix(PO.stance,hit,sk); }
-    else { const q = t-4.6; rx = 5;
-      rp = q<.5 ? mix(PO.stance,PO.kick,eo(clamp(q/.12,0,1))) : mix(PO.kick,PO.stance,eio(clamp((q-.8)/.6,0,1)));
-      bx = -5-(1-Math.exp(-q*2.3))*55;
-      if (q < .7){ by = -11-Math.sin(q/.7*PI)*12; bp = PO.hurt; }
-      else bp = mix(PO.land,PO.stance,eio(clamp((q-1.2)/.6,0,1))); }
-    return { b:{x:bx,y:by,g:by==null?0:null,f:fb,s:10,c:BLK,pose:bp}, r:{x:rx,g:0,f:-1,s:10,c:RED,pose:rp} };
-  };
-  if (t < 4.6){ cam.x = Math.sin(t*1.3)*2; cam.y = -15; cam.z = 1.75+Math.sin(t*2)*.08; }
-  else { const q = eo(seg(4.6,5.6)); cam.x = lerp(0,-28,q); cam.y = -15; cam.z = lerp(1.75,1.1,q); }
-  begin('dark');
-  if (t < .6 || (t > 4.6 && t < 5.3)) ghosts(tt => st3(tt).b, t, 4); if (t < .6) ghosts(tt => st3(tt).r, t, 4);
-  const s = st3(t);
-  const B = fig(s.b), Rd = fig(s.r);
-  if (at(.55)){ impact(0,-16,6); flashA = .45; snd('boom',.7); }
-  const b = Math.floor((t-.55)/.32), pb = Math.floor((prevSt-.55)/.32);
-  if (t > .87 && t < 4.6 && b !== pb){ const h = b%2===1 ? B : Rd; const hp = b%2===1 ? B.foot : Rd.foot;
-    const p = (b%3===0) ? hp : (b%2===1 ? B.hand : Rd.hand); impact(p[0],p[1],2.5+R()*1.5); snd('hit'); }
-  if (at(4.65)){ impact(Rd.foot[0],Rd.foot[1],7); flashA = .5; snd('boom',.8); }
-  if (t > 5.3 && t < 6.2 && R() < .7) P_({x:B.hip[0]-2,y:-.5,vx:-10-R()*20,vy:-R()*6,r:.8+R(),grow:2.5,max:1,drag:2,col:'150,150,150',a:.6,floor:true});
-}});
+// 3 — ilk dövüş: siyah vs kırmızı
+SC.push(fightScene(14, 'dark', S => {
+  const b = new Fx(BLK,-14,1), r = new Fx(RED,20,-1);
+  b.key(.45,'stance2',-12); r.key(.55,'stance2',17);
+  let t = choreo([r,b], .6, 10.9, 101);
+  t = Math.max(t, 10.9, r.busy, b.busy);
+  ex(t, r, b, 'spin', 'down');
+  return [b, r];
+}, { dust:'110,110,110' }));
 
 // 4 — beyaz geliyor, üçlü çarpışma
 SC.push({ d:6.2, f(t){
   let rx, bx, rp, bp, wp = PO.stand, ry = null, by = null, rsp = 0;
   if (t < .6){ const q = eo(t/.6); rx = lerp(-70,-12,q); bx = lerp(70,12,q); const ph = Math.floor(t*14)%2;
     rp = ph?PO.run1:PO.run2; bp = ph?PO.run2:PO.run1; wp = mix(PO.stand,PO.block,eo(t/.6)); }
-  else if (t < 2.6){ const tr = Math.sin(t*70)*.25; rx = -12+tr; bx = 12-tr; rp = PO.kick; bp = PO.punch; wp = PO.block; }
+  else if (t < 2.6){ const tr = Math.sin(t*70)*.25; rx = -12+tr; bx = 12-tr; rp = PO.kick; bp = PO.jab; wp = PO.block; }
   else { const q = t-2.6; rx = -12-(1-Math.exp(-q*2.5))*90; bx = -rx; ry = -11-Math.sin(clamp(q,0,1)*PI)*14;
     by = ry; rp = bp = PO.hurt; rsp = q*6; wp = mix(PO.block,PO.burst,eo(clamp(q/.2,0,1))); }
   cam.x = 0; cam.y = -17; cam.z = t < 2.6 ? 1.35+t*.06 : lerp(1.5,.8,eo(seg(2.6,3.4)));
@@ -325,15 +580,25 @@ SC.push({ d:6.2, f(t){
   fig({ x:0, g:0, f:1, s:10.5, c:WHT, pose:wp });
   const Rd = fig({ x:rx, y:ry, g:ry==null?0:null, f:1, s:10, c:RED, pose:rp, spin:rsp });
   const Bk = fig({ x:bx, y:by, g:by==null?0:null, f:-1, s:10, c:BLK, pose:bp, spin:rsp });
-  if (at(.6)){ impact(Rd.foot[0],Rd.foot[1],5,'255,255,255'); impact(Bk.hand[0],Bk.hand[1],5,'255,255,255'); flashA = .35; snd('boom',.7);
+  if (at(.6)){ impact(Rd.foot[0],Rd.foot[1],5); impact(Bk.hand[0],Bk.hand[1],5); flashA = .35; snd('boom',.7);
     P_({t:'ring',x:0,y:-15,r:5,sp:60,w:2,max:.5,col:'90,90,90'}); }
   if (t > .6 && t < 2.6 && R() < .6){ const d = R()<.5?-1:1; P_({x:d*3,y:-.5,vx:d*(30+R()*40),vy:-R()*4,r:.6+R(),grow:3,max:.9,drag:1.5,col:'150,150,150',a:.5,floor:true}); }
   if (t > .6 && t < 2.6 && R() < .2) snd('zap',.4);
   if (at(2.6)){ P_({t:'ring',x:0,y:-15,r:5,sp:140,w:3,max:.6,col:'70,70,70'}); P_({t:'ring',x:0,y:0,r:5,sp:160,w:2,max:.8,fl:.15,col:'90,90,90'});
-    impact(0,-15,7,'255,255,255'); flashA = .6; dustBurst(0,0,50,5); snd('boom'); }
+    impact(0,-15,7); flashA = .6; dustBurst(0,0,50,5); snd('boom'); }
 }});
 
-// 5 — ufukta kovalamaca (geniş çekim)
+// 5 — üçlü kapışma
+SC.push(fightScene(11, 'light', S => {
+  const w = new Fx(WHT,0,1,{s:10.5}), r = new Fx(RED,-26,1), b = new Fx(BLK,26,-1);
+  r.key(.4,'stance2',-22); b.key(.45,'stance2',22);
+  let t = choreo([w,r,b], .5, 9.2, 202, { mw:{ fly:.3, super:.2 } });
+  t = Math.max(t, 9.2, w.busy, r.busy);
+  ex(t, w, r, 'super', 'down');
+  return [r, b, w];
+}, { col:() => '40,40,40', dust:'150,150,150', zw:95 }));
+
+// 6 — ufukta kovalamaca (geniş çekim)
 SC.push({ d:4, f(t){
   cam.x = t*45; cam.y = -30; cam.z = .4;
   begin('light');
@@ -351,7 +616,7 @@ SC.push({ d:4, f(t){
   if (at(1.8)) snd('whoosh',.6);
 }});
 
-// 6 — kırmızı ışın yağmuru & beyaz şimşek
+// 7 — kırmızı ışın yağmuru & beyaz şimşek
 const BEAMS = (() => { const r = rng(11), a = []; for (let i=0;i<24;i++) a.push({ x:(r()-.5)*130, t0:.25+i*.16+r()*.1, w:1.5+r()*3 }); return a; })();
 SC.push({ d:5.2, f(t){
   cam.x = 0; cam.y = -42; cam.z = .85;
@@ -377,13 +642,25 @@ SC.push({ d:5.2, f(t){
   if (at(4.85)){ impact(0,ry,6); flashA = .7; snd('boom'); }
 }});
 
-// 7 — yumruk yumruğa, turuncu patlama
+// 8 — kırmızı vs beyaz (şimşekli)
+SC.push(fightScene(10.5, 'light', S => {
+  const r = new Fx(RED,-18,1), w = new Fx(WHT,18,-1,{s:10.5});
+  r.key(.3,'stance2',-16); w.key(.3,'stance',16);
+  let t = choreo([w,r], .4, 8.6, 303, { gap:.04, mw:{ throw:.9 } });
+  t = Math.max(t, 8.6, r.busy, w.busy);
+  ex(t, r, w, 'upper', 'chin');
+  return [r, w];
+}, { zap:true, col:e => e.A.c===RED ? '242,27,11' : '50,50,50', dust:'150,150,150',
+     post(t){ const P = jointsAt(this.F[1],t); if (R() < .3){ const a = R()*PI*2, L = 4+R()*8;
+       bolt(P.head[0],P.head[1],P.head[0]+Math.cos(a)*L,P.head[1]+Math.sin(a)*L,.3,'#fff','#bfe8ff'); } } }));
+
+// 9 — yumruk yumruğa, turuncu patlama
 SC.push({ d:3.6, f(t){
   cam.x = 0; cam.y = -29; cam.z = lerp(3,4.4,t/3.6);
   begin('brown');
   const push = t > 2.7 ? (t-2.7)*70 : 0, tr = Math.sin(t*80)*.15;
-  const Rd = fig({ x:-12.5-push+tr, y:-20, f:1, s:10, c:RED, pose:PO.punch });
-  fig({ x:12.5+push-tr, y:-20, f:-1, s:10, c:WHT, pose:PO.punch });
+  const Rd = fig({ x:-12.5-push+tr, y:-20, f:1, s:10, c:RED, pose:PO.jab });
+  fig({ x:12.5+push-tr, y:-20, f:-1, s:10, c:WHT, pose:PO.jab });
   const cx = Rd.hand[0]+.5, cy = Rd.hand[1];
   if (t < 2.75){
     const r = 7+Math.sin(t*20)*1.2+t*2, g = X.createRadialGradient(cx,cy,0,cx,cy,r);
@@ -398,7 +675,7 @@ SC.push({ d:3.6, f(t){
   if (at(2.7)){ flashA = 1; flashC = '255,220,170'; shake = 9; snd('boom'); impact(cx,cy,9,'255,200,80'); }
 }});
 
-// 8 — yerde sürüklenme, iz
+// 10 — yerde sürüklenme, iz
 SC.push({ d:4.6, f(t){
   const xAt = t => -55+(1-Math.exp(-t*1.4))*95;
   const x0 = xAt(t), q = Math.exp(-t*1.4);
@@ -413,7 +690,7 @@ SC.push({ d:4.6, f(t){
   if (at(.05)) snd('rumble',.9);
 }});
 
-// 9 — siyahın küpü
+// 11 — siyahın küpü
 SC.push({ d:5.6, f(t){
   cam.x = 0; cam.y = -30; cam.z = .8;
   begin('dark');
@@ -423,12 +700,11 @@ SC.push({ d:5.6, f(t){
   const ap = eo(seg(1,2)), cy = t<3.1 ? -72+Math.sin(t*2)*2 : lerp(-72,-12.5,ei(seg(3.1,3.35)));
   if (ap > 0 && t < 5){
     const sz = 12.5, ry = t*1.3, rx = .45, V = [];
-    for (let i=0;i<8;i++){ let x = (i&1?1:-1)*sz, y = (i&2?1:-1)*sz, z = (i&4?1:-1)*sz;
-      let x2 = x*Math.cos(ry)-z*Math.sin(ry), z2 = x*Math.sin(ry)+z*Math.cos(ry);
-      let y2 = y*Math.cos(rx)-z2*Math.sin(rx); V.push([30+x2, cy+y2]); }
+    for (let i=0;i<8;i++){ const x = (i&1?1:-1)*sz, y = (i&2?1:-1)*sz, z = (i&4?1:-1)*sz;
+      const x2 = x*Math.cos(ry)-z*Math.sin(ry), z2 = x*Math.sin(ry)+z*Math.cos(ry);
+      V.push([30+x2, cy+y*Math.cos(rx)-z2*Math.sin(rx)]); }
     const E = [[0,1],[2,3],[4,5],[6,7],[0,2],[1,3],[4,6],[5,7],[0,4],[1,5],[2,6],[3,7]];
     const al = t > 4.2 ? 1-seg(4.2,5) : ap;
-    X.fillStyle = `rgba(0,0,0,${.2*al})`; X.fillRect(30-sz*1.3,cy-sz*1.3,sz*2.6,sz*2.6*0);
     X.strokeStyle = `rgba(10,10,10,${al})`; X.lineWidth = .5; X.beginPath();
     for (const [a,b] of E){ X.moveTo(V[a][0],V[a][1]); X.lineTo(V[b][0],V[b][1]); } X.stroke();
     X.strokeStyle = `rgba(200,200,200,${.25*al})`; X.lineWidth = .2; X.stroke();
@@ -442,11 +718,11 @@ SC.push({ d:5.6, f(t){
   if (at(4.6)){ impact(30,-8,6,'242,27,11'); snd('whoosh'); flashA = .25; }
 }});
 
-// 10 — alçak uçuş, yükselme
+// 12 — alçak uçuş, yükselme
 SC.push({ d:4, f(t){
   cam.x = 0; cam.y = t<3 ? -25 : lerp(-25,-150,ei(seg(3,4))); cam.z = .45;
   begin('dark');
-  const pos = (t,ph) => { const x = 200-Math.min(t,3)*135 + (t>3?0:0); let y = -5-Math.sin(t*5+ph)*5; if (t>3) y -= Math.pow(t-3,2)*320; return [x - (t>3?(t-3)*30:0), y]; };
+  const pos = (t,ph) => { const x = 200-Math.min(t,3)*135; let y = -5-Math.sin(t*5+ph)*5; if (t>3) y -= Math.pow(t-3,2)*320; return [x - (t>3?(t-3)*30:0), y]; };
   for (const [ph,col] of [[0,'242,27,11'],[PI,'15,15,15']]){
     X.lineWidth = 1.2; X.lineCap = 'round';
     for (let i=0;i<30;i++){ const a = pos(t-i*.02,ph), b = pos(t-(i+1)*.02,ph);
@@ -458,43 +734,31 @@ SC.push({ d:4, f(t){
   if (at(3)){ snd('whoosh'); flashA = .2; }
 }});
 
-// 11 — uzayda dövüş
-SC.push({ d:8.5, f(t){
-  cam.x = 0; cam.y = -20; cam.z = 2.2;
-  X.setTransform(DPR,0,0,DPR,0,0); drawSpace(t);
-  // gezegen
-  const pr = Math.max(W,H)*1.15, pcx = -pr*.55 + t*4, pcy = H*.55 + pr*.45;
-  let g = X.createRadialGradient(pcx,pcy,pr*.8,pcx,pcy,pr*1.08);
-  g.addColorStop(0,'rgba(20,90,120,0)'); g.addColorStop(.72,'rgba(40,150,190,.25)'); g.addColorStop(.74,'rgba(150,230,255,.9)'); g.addColorStop(.76,'rgba(60,170,210,.35)'); g.addColorStop(1,'rgba(20,90,120,0)');
-  X.fillStyle = '#071820'; X.beginPath(); X.arc(pcx,pcy,pr*.98,0,7); X.fill();
-  X.fillStyle = g; X.beginPath(); X.arc(pcx,pcy,pr*1.08,0,7); X.fill();
-  X.strokeStyle = 'rgba(210,245,255,.95)'; X.lineWidth = 2.5; X.shadowColor = '#7fdcff'; X.shadowBlur = 25;
-  X.beginPath(); X.arc(pcx,pcy,pr*.98,0,7); X.stroke(); X.shadowBlur = 0;
-  applyCam();
-  if (t < 1.4){ const a = 1-seg(.6,1.4); X.fillStyle = `rgba(110,110,110,${a*.8})`; X.beginPath(); X.moveTo(-6,40); X.lineTo(6,40); X.lineTo(.5,-20); X.lineTo(-.5,-20); X.fill(); }
-  const ang = t*1.6, cx = 0, cy = -20;
-  let rx = cx-Math.cos(ang)*6, ryy = cy-Math.sin(ang)*3, bx = cx+Math.cos(ang)*6, by = cy+Math.sin(ang)*3;
-  const beat = Math.floor((t-1)/.42), lt = ((t-1)%.42)/.42;
-  let rp = PO.stance, bp = PO.stance;
-  if (t > 1 && t < 6){ const sk = lt<.35?eo(lt/.35):1-eio((lt-.35)/.65)*.7; const hit = beat%3===1?PO.kick:PO.punch;
-    if (beat%2){ rp = mix(PO.stance,hit,sk); bp = mix(PO.stance,PO.hurt,sk*.5); } else { bp = mix(PO.stance,hit,sk); rp = mix(PO.stance,PO.hurt,sk*.5); } }
-  let rsp = Math.sin(t*1.3)*.3, rAlpha = 1;
-  if (t >= 6){ const q = t-6; bp = q<.5?mix(PO.stance,PO.kick,eo(clamp(q/.12,0,1))):PO.stance;
-    rx -= q*q*22+q*6; ryy += q*q*16+q*4; rp = PO.hurt; rsp = q*8;
-    if (q > .4){ const L = Math.min(30,q*25); g = X.createLinearGradient(rx,ryy,rx+L,ryy-L*.7);
-      g.addColorStop(0,'rgba(255,200,90,.95)'); g.addColorStop(1,'rgba(255,80,0,0)');
-      X.strokeStyle = g; X.lineWidth = 3; X.lineCap = 'round'; X.beginPath(); X.moveTo(rx,ryy); X.lineTo(rx+L,ryy-L*.7); X.stroke(); } }
-  const fr = rx < bx ? 1 : -1;
-  const Rd = fig({ x:rx, y:ryy+4, f:fr, s:3.2, c:RED, pose:rp, spin:rsp, alpha:rAlpha });
-  const Bk = fig({ x:bx, y:by+4, f:-fr, s:3.2, c:BLK, pose:bp, spin:-rsp*.6 });
-  X.strokeStyle = 'rgba(255,255,255,.25)'; X.lineWidth = .08; X.beginPath(); X.arc(Bk.head[0],Bk.head[1],3.2*.36,0,7); X.stroke();
-  const pb = Math.floor((prevSt-1)/.42);
-  if (t > 1.2 && t < 6 && beat !== pb){ impact((rx+bx)/2,(ryy+by)/2+1,1.2); snd('hit',.45); }
-  if (at(6)){ impact((rx+bx)/2,(ryy+by)/2+1,3); flashA = .4; snd('boom',.6); }
-  if (at(6.4)) snd('whoosh',.8);
-}});
+// 13 — uzayda dövüş
+SC.push(fightScene(9.5, 'space', S => {
+  const r = new Fx(RED,-14,1,{ground:false,baseY:-18}), b = new Fx(BLK,14,-1,{ground:false,baseY:-18});
+  b.rim = 'rgba(150,215,255,.55)'; r.rim = 'rgba(255,150,120,.3)';
+  r.key(.3,'stance',-12,2); b.key(.3,'stance2',12,-1);
+  let t = choreo([r,b], .4, 6.3, 404, { space:true, pause:.05 });
+  t = Math.max(t, 6.3, r.busy, b.busy);
+  r.cut(t); b.cut(t); const rx = r.end().v[9], rh = r.end().v[10];
+  r.key(t+.45,'stance',rx,rh,null,1); b.key(t+.45,'stance2',rx+16,rh+3,null,-1);
+  S.mt = ex(t+.5, b, r, 'front', 'meteor').tc;
+  r.camUntil = S.mt+.15;
+  return [r, b];
+}, { zw:80, cs:3,
+     post(t){
+       if (t < this.mt+.12) return;
+       const r = this.F[0]; X.lineCap = 'round';
+       for (let i=0;i<24;i++){
+         const a = jointsAt(r,t-i*.03).hip, c = jointsAt(r,t-(i+1)*.03).hip;
+         X.strokeStyle = `rgba(255,${140+i*4},40,${(1-i/24)*.9})`; X.lineWidth = 3*(1-i/24)+.3;
+         X.beginPath(); X.moveTo(a[0],a[1]); X.lineTo(c[0],c[1]); X.stroke();
+       }
+       if (at(this.mt+.4)) snd('whoosh',.9);
+     } }));
 
-// 12 — meteor düşüşü
+// 14 — meteor düşüşü
 SC.push({ d:4.6, f(t){
   cam.x = 0; cam.y = -35; cam.z = .5;
   begin('light');
@@ -515,15 +779,41 @@ SC.push({ d:4.6, f(t){
   }
 }});
 
-// 13 — final: yakın planlar, kararma
+// 15 — son düello, beyaz araya giriyor
+SC.push(fightScene(9.8, 'light', S => {
+  const r = new Fx(RED,-10,1,{pose:PO.kneel}), b = new Fx(BLK,70,-1);
+  r.key(.7,'kneel',-10); r.key(1.2,'stance',-10);
+  b.key(.6,'stance',70);
+  let t = choreo([b,r], .9, 6.4, 505, { gap:.03, pause:.04 });
+  t = Math.max(t, 6.4, r.busy, b.busy);
+  r.cut(t); b.cut(t);
+  const m = (r.end().v[9] + b.end().v[9])/2;
+  r.key(t+.35,'crossW',m-25,0,null,1); b.key(t+.35,'crossW',m+25,0,null,-1);
+  r.key(t+.5,'cross',m-23.5,0,null,1); b.key(t+.5,'cross',m+23.5,0,null,-1);
+  r.key(t+2.6,'cross',m-23.2,0,null,1); b.key(t+2.6,'cross',m+23.2,0,null,-1);
+  const w = new Fx(WHT,m-170,1,{s:10.5});
+  w.key(t+.25,'stance',m-170); w.key(t+.33,'run1',m-90); w.key(t+.42,'run2',m-20); w.key(t+.5,'block',m); w.key(t+2.6,'block',m);
+  w.camFrom = t+.45;
+  EV.push({ t:t+.5, A:r, limb:'bh', pow:7, imp:'big' }, { t:t+.5, A:b, limb:'bh', pow:7, imp:'big' });
+  S.tc = t+.5;
+  return [b, r, w];
+}, { col:() => '40,40,40', dust:'150,150,150',
+     post(t){ if (at(this.tc)){ flashA = .8; shake = 8; dustBurst(cam.x,0,60,5); P_({t:'ring',x:cam.x,y:0,r:4,sp:150,w:2,max:.8,fl:.15,col:'90,90,90'}); }
+              if (t > this.tc && t < this.tc+1.8) shake = Math.max(shake,1.2); } }));
+
+// 16 — final: yakın planlar, kararma
 SC.push({ d:10, f(t){
-  if (t < 3.5){ const wx = -22+t*6; cam.x = wx+4; cam.y = -18; cam.z = 2.6; }
+  if (t < 3.5){ cam.x = 0; cam.y = -16; cam.z = lerp(1.1,1.5,eio(t/3.5)); }
   else if (t < 6.8){ cam.x = 0; cam.y = -24; cam.z = lerp(3.2,3.6,seg(3.5,6.8)); }
   else { cam.x = 0; cam.y = -25.5; cam.z = lerp(3.6,7.5,eio(seg(6.8,9))); }
   begin('light');
   if (R() < .3) P_({x:cam.x+(R()-.5)*60,y:-R()*20,vx:8+R()*6,vy:-R(),r:.4+R()*.6,grow:1,max:2,col:'240,240,240',a:.6});
-  if (t < 3.5){ const wx = -22+t*6; fig({ x:wx, g:0, f:1, s:10, c:WHT, pose:walkPose(t,6) }); }
-  else if (t < 6.8){
+  const br = (ph) => PO.stance.map((v,i) => v + (i===2||i===4 ? Math.sin(t*5+ph+i)*.07 : 0));
+  if (t < 3.5){
+    fig({ x:-20, g:0, h:.2+.2*Math.sin(t*6), f:1, s:10, c:RED, pose:br(0) });
+    fig({ x:20, g:0, h:.2+.2*Math.sin(t*6+2), f:-1, s:10, c:BLK, pose:br(2) });
+    fig({ x:0, g:0, f:1, s:10.5, c:WHT, pose:PO.stand, front:true });
+  } else if (t < 6.8){
     fig({ x:0, g:0, f:1, s:11, c:WHT, pose:PO.stand, front:true });
     fig({ x:-7.5, g:0, f:1, s:10, c:RED, pose:PO.stand, front:true, blink:eio(seg(5.5,6))*.5 });
     fig({ x:7.5, g:0, f:1, s:10, c:BLK, pose:PO.stand, front:true, blink:eio(seg(5.5,6))*.5 });
@@ -536,15 +826,17 @@ SC.push({ d:10, f(t){
 
 // ===================== döngü =====================
 const TOTAL = SC.reduce((a,s) => a+s.d, 0);
+function enter(i){ si = i; st = 0; prevSt = -1; flashC = '255,255,255'; hitstop = 0; zoomKick = 0; if (SC[si] && SC[si].init) SC[si].init(); }
 function step(dt){
   if (!started) return;
-  prevSt = st; st += dt;
+  let sdt = dt; if (hitstop > 0){ hitstop -= dt; sdt = dt*.07; }
+  prevSt = st; st += sdt;
   if (st >= SC[si].d){
-    si++; st = 0; prevSt = -1; flashC = '255,255,255';
-    if (si >= SC.length){ finish(); return; }
+    if (si+1 >= SC.length){ finish(); return; }
+    enter(si+1);
   }
-  upParts(dt);
-  shake *= Math.exp(-dt*5); flashA *= Math.exp(-dt*4);
+  upParts(sdt);
+  shake *= Math.exp(-dt*5); flashA *= Math.exp(-dt*4); zoomKick *= Math.exp(-dt*5);
 }
 function render(dt){
   X.setTransform(DPR,0,0,DPR,0,0); X.globalAlpha = 1;
@@ -559,7 +851,7 @@ function render(dt){
   bar.style.width = (el/TOTAL*100) + '%';
 }
 function finish(){
-  started = false; si = 0; st = 0; prevSt = -1; parts = []; shake = flashA = 0;
+  started = false; parts = []; shake = flashA = 0; enter(0);
   ov.innerHTML = '<b>SO<i>N</i></b><span>↻ Tekrar izlemek için tıkla</span>'; ov.style.display = 'flex'; bar.style.width = '0';
 }
 let last = 0;
@@ -570,12 +862,13 @@ function loop(ts){
 }
 ov.addEventListener('click', () => {
   if (!AC) initAudio(); else if (AC.state === 'suspended') AC.resume();
-  ov.style.display = 'none'; started = true; si = 0; st = 0; prevSt = -1;
+  ov.style.display = 'none'; parts = []; enter(0); started = true;
 });
 requestAnimationFrame(loop);
 // test kancası: belirli bir saniyeye hızlı ilerlet
-window.__seek = sec => { started = true; ov.style.display = 'none'; si = 0; st = 0; prevSt = -1; parts = [];
+window.__seek = sec => { started = true; ov.style.display = 'none'; parts = []; enter(0);
   const n = Math.round(sec*30); for (let i=0;i<n;i++){ step(1/30); if (!started) return; render(1/30); } };
+window.__total = TOTAL;
 </script>
 </body>
 </html>
