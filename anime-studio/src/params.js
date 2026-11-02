@@ -198,7 +198,7 @@ export const HAIR_PRESETS = {
   spiky: { bangs: 'spiky', bangsLen: 0.8, sideLen: 0.35, backLen: 0.45, volume: 1.35, spikiness: 1.0, wave: 0.0, tipFlip: 0.3, tails: 'none', strandWidth: 1.2, bangsCount: 8 },
   hime: { bangs: 'straight', bangsLen: 1.0, sideLen: 0.95, backLen: 1.9, volume: 1.0, spikiness: 0.0, wave: 0.0, tipFlip: 0.0, tails: 'none', strandWidth: 1.0, bangsCount: 11, ahoge: false },
   bun: { bangs: 'split', bangsLen: 0.85, sideLen: 0.8, backLen: 0.1, volume: 0.95, spikiness: 0.15, wave: 0.15, tipFlip: 0.0, tails: 'bun', tailHeight: 0.85, tailVolume: 1.0, strandWidth: 1.0, bangsCount: 8 },
-  wolf: { bangs: 'spiky', bangsLen: 1.0, sideLen: 0.9, backLen: 0.85, volume: 1.15, spikiness: 0.7, wave: 0.1, tipFlip: 0.45, tails: 'none', strandWidth: 0.95, bangsCount: 10 },
+  wolf: { bangs: 'spiky', bangsLen: 1.0, sideLen: 0.9, backLen: 0.85, volume: 1.15, spikiness: 0.45, wave: 0.1, tipFlip: 0.6, tails: 'none', strandWidth: 0.95, bangsCount: 10 },
 };
 
 // Full character presets

@@ -111,7 +111,7 @@ class App {
     sun.shadow.mapSize.set(2048, 2048);
     sun.shadow.bias = -0.0004;
     sun.shadow.normalBias = 0.012;
-    sun.shadow.radius = 2.5;
+    sun.shadow.radius = 4;
     const sc2 = sun.shadow.camera;
     sc2.near = 0.1;
     sc2.far = 8;

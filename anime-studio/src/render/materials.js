@@ -76,7 +76,7 @@ export function makeToon({ kind = 'cloth', map = null } = {}) {
     uIrisDepth: { value: 0.006 },
     uFaceSize: { value: new THREE.Vector2(0.25, 0.25) },
     // how strongly cast shadows show on this material (faces get softer shadows, as in anime setups)
-    uCastMul: { value: kind === 'face' ? 0.5 : kind === 'skin' ? 0.85 : 1.0 },
+    uCastMul: { value: kind === 'face' ? 0.5 : kind === 'skin' ? 0.65 : 1.0 },
   };
   mat.userData.uniforms = uniforms;
   mat.userData.kind = kind;
@@ -148,29 +148,34 @@ export function makeToon({ kind = 'cloth', map = null } = {}) {
       float gt = smoothstep(0.2, 1.0, vHairT) * uGrad;
       base = mix(base, uTip, gt);
       shadeCol = mix(shadeCol, uTip * uShade, gt);
-      // Kajiya-Kay anisotropic highlight along the strand, toon-stepped
+      // Kajiya-Kay soft sheen along the strand + a clean, jagged "angel ring" around the head
       vec3 Tn = normalize(vHairTan);
       float across = fract(vHairUv.x);
       float sid = floor(vHairUv.x);
-      float jitter = (vnoise(vec3(across * 9.0 + sid * 3.7, vHairT * 6.0, sid)) - 0.5) * 0.22;
-      // painted strand lines along each clump (converging toward the tip)
-      float lnA = across * 6.0 + vnoise(vec3(sid, vHairT * 3.0, 0.0)) * 1.5;
-      float lines = pow(abs(sin(lnA * 3.14159)), 10.0);
-      float lnB = pow(abs(sin((across * 13.0 + sid * 0.37) * 3.14159)), 18.0);
-      float strandTex = 1.0 - (lines * 0.14 + lnB * 0.07) * (0.4 + 0.6 * smoothstep(0.0, 0.6, vHairT));
+      float lnA = across * 5.0 + vnoise(vec3(sid * 1.7, vHairT * 2.5, 0.0)) * 1.2;
+      float lines = pow(abs(sin(lnA * 3.14159)), 12.0);
+      float lnB = pow(abs(sin((across * 11.0 + sid * 0.37) * 3.14159)), 20.0);
+      float strandTex = 1.0 - (lines * 0.12 + lnB * 0.06) * (0.35 + 0.65 * smoothstep(0.0, 0.5, vHairT));
       vec3 Hh = normalize(L + V);
-      vec3 T1 = normalize(Tn + N * (0.15 + jitter));
-      float th1 = dot(T1, Hh);
-      float kk1 = pow(sqrt(max(1.0 - th1 * th1, 0.0)), 90.0);
-      vec3 T2 = normalize(Tn + N * (-0.1 + jitter));
+      vec3 T2 = normalize(Tn + N * 0.08);
       float th2 = dot(T2, Hh);
-      float kk2 = pow(sqrt(max(1.0 - th2 * th2, 0.0)), 24.0);
-      float band = smoothstep(0.55, 0.66, kk1) * (1.0 - vHairT * 0.7) * smoothstep(0.3, 0.7, dot(N, V));
-      float soft = smoothstep(0.35, 0.9, kk2) * 0.18;
+      float kk2 = pow(sqrt(max(1.0 - th2 * th2, 0.0)), 30.0);
+      float soft = smoothstep(0.45, 0.95, kk2) * 0.14;
+      // ring: polar band (vHairUv.y = polar angle / pi) with a zig-zag lower edge per clump
+      float zig = abs(fract(across * 2.0 + sid * 0.31) - 0.5) * 2.0;
+      float ph = vHairUv.y;
+      float ringC = 0.31 + 0.015 * sin(sid * 1.3);
+      float upper = smoothstep(ringC - 0.04, ringC - 0.032, ph);
+      float lower = 1.0 - smoothstep(ringC + 0.01 + zig * 0.035, ringC + 0.016 + zig * 0.035, ph);
+      float facing = smoothstep(0.25, 0.6, dot(N, V));
+      // painted clump separation: darker toward each clump's edges, slight per-clump tone shift
+      float edge = smoothstep(0.32, 0.5, abs(across - 0.5));
+      strandTex *= (1.0 - 0.16 * edge) * (0.97 + 0.06 * fract(sin(sid * 12.9898) * 43758.5453));
+      float band = upper * lower * facing * (1.0 - smoothstep(0.3, 0.6, vHairT));
       litMix = lit;
       col = mix(shadeCol, base, lit) * strandTex;
       col += uSpec * soft * lit * uSpecStr;
-      col = mix(col, uSpec, band * lit * uSpecStr * 0.85);
+      col = mix(col, mix(base, uSpec, 0.75), band * (0.35 + 0.65 * lit) * uSpecStr);
       `
         : '';
     const skinCode = SKIN
@@ -200,7 +205,7 @@ export function makeToon({ kind = 'cloth', map = null } = {}) {
       vec3 L = normalize(uLightDir);
       float ndl = dot(N, L) * 0.5 + 0.5;
       float sh = toonCastShadow();
-      sh = mix(1.0, smoothstep(0.25, 0.75, sh), uShadowStr * uCastMul);
+      sh = mix(1.0, smoothstep(0.15, 0.85, sh), uShadowStr * uCastMul);
       float th = uThreshold;
       float lit = smoothstep(th - uSoft * 0.5 - 0.001, th + uSoft * 0.5 + 0.001, ndl) * sh;
       float litMix = lit;
