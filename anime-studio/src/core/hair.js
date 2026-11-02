@@ -102,7 +102,7 @@ export function buildHair(rig, p, head, bodyField, Q) {
       let L = (0.3 + 0.36 * p.bangsLen) * (1 + 0.55 * Math.abs(u) ** 2.2);
       let W = (0.9 / n) * sw * (1 + jit(0.12));
       let dir = [Math.sin(theta) * 0.5, 0.15, Math.cos(theta)];
-      let grav = grav0;
+      let grav = lerp(0.42, 0.3, spiky);
       let flip = p.tipFlip * 0.4;
       if (p.bangs === 'straight') {
         L *= 1 + jit(0.05);
@@ -227,6 +227,29 @@ export function buildHair(rig, p, head, bodyField, Q) {
     return [(Math.atan2(d[0], d[2]) / TAU + 1) % 1, Math.acos(clamp(d[1], -1, 1)) / Math.PI];
   };
 
+  // outer hair surface map in cranium-centred spherical coords (for placing accessories)
+  const TB = 48, PB = 24;
+  const outerMap = new Float32Array(TB * PB);
+  const capR = (l) => v3.len(v3.sub(l, Cc));
+  const bin = (l) => {
+    const d = v3.norm(v3.sub(l, Cc));
+    const th = (Math.atan2(d[0], d[2]) + TAU) % TAU;
+    const ph = Math.acos(clamp(d[1], -1, 1));
+    return [Math.min(TB - 1, Math.floor((th / TAU) * TB)), Math.min(PB - 1, Math.floor((ph / Math.PI) * PB))];
+  };
+  const mark = (wp, extra) => {
+    const l = head.toLocal(wp[0], wp[1], wp[2]);
+    const [a, b] = bin(l);
+    const r = capR(l) + extra / hH;
+    if (r > outerMap[b * TB + a]) outerMap[b * TB + a] = r;
+  };
+  // cap baseline
+  for (let b = 0; b < PB; b++)
+    for (let a = 0; a < TB; a++) {
+      const sp = surf(((a + 0.5) / TB) * TAU, ((b + 0.5) / PB) * Math.PI);
+      mark(sp, capOff);
+    }
+
   for (const st of strands) {
     const N = st.group === 'ahoge' || st.group === 'crown' || st.group === 'top' || st.group === 'bun' ? Math.max(6, Math.round(SEG * 0.6)) : SEG;
     const Lw = st.L * hH;
@@ -318,6 +341,7 @@ export function buildHair(rig, p, head, bodyField, Q) {
         pts[i] = v3.add(pts[i], v3.mul(B[i], a));
       }
     }
+    if (st.group !== 'tail' && st.group !== 'ahoge') for (let i = 0; i < N; i++) mark(pts[i], thick(i / N) * 1.3);
     // build tube
     const base = pos.length / 3;
     for (let i = 0; i < N; i++) {
@@ -421,7 +445,28 @@ export function buildHair(rig, p, head, bodyField, Q) {
     rigidWeights(tm, rig.idx.Head);
     parts.push({ name: 'HairTies', mat: 'tie', mesh: tm });
   }
-  return { parts, capOff, anchors };
+  // dilate map a little so accessories sit on top of neighbouring strands too
+  const om = new Float32Array(outerMap);
+  for (let b = 0; b < PB; b++)
+    for (let a = 0; a < TB; a++) {
+      let m = outerMap[b * TB + a];
+      for (let db = -1; db <= 1; db++)
+        for (let da = -1; da <= 1; da++) {
+          const bb = clamp(b + db, 0, PB - 1), aa = (a + da + TB) % TB;
+          m = Math.max(m, outerMap[bb * TB + aa] * 0.985);
+        }
+      om[b * TB + a] = m;
+    }
+  // world point on the outer hair surface
+  const outer = (theta, phi, extra = 0) => {
+    const a = Math.floor((((theta % TAU) + TAU) % TAU) / TAU * TB) % TB;
+    const b = clamp(Math.floor((phi / Math.PI) * PB), 0, PB - 1);
+    const R = om[b * TB + a];
+    const d = sph(theta, phi);
+    const l = [Cc[0] + d[0] * (R + extra / hH), Cc[1] + d[1] * (R + extra / hH), Cc[2] + d[2] * (R + extra / hH)];
+    return { p: toW(l), n: v3.norm(d) };
+  };
+  return { parts, capOff, anchors, outer };
 }
 
 // make every triangle face along its vertex normals

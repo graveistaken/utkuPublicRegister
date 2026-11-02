@@ -125,7 +125,7 @@ export function buildCharacter(p, groups = 'ABC') {
   );
 
   const hair = !doC ? { parts: [] } : T('hair', () => memo('hair', [...headDeps, ...pick(p, HAIR_KEYS), ...pick(p, ['animalEars'])], () => buildHair(rig, p, head, bodyField, Q)));
-  const acc = !doC ? { parts: [] } : T('acc', () => memo('acc', [...headDeps, ...pick(p, ACC_KEYS), p.volume, p.eyeY, p.eyeSpacing, p.eyeSize], () => buildAccessories(rig, p, head, body, bodyField, Q)));
+  const acc = !doC ? { parts: [] } : T('acc', () => memo('acc', [...headDeps, ...pick(p, ACC_KEYS), ...pick(p, HAIR_KEYS), p.eyeY, p.eyeSpacing, p.eyeSize], () => buildAccessories(rig, p, head, body, bodyField, Q, hair)));
 
   const parts = [];
   const push = (name, mat, mesh, extra = {}) => {

@@ -61,8 +61,8 @@ export const POSES = {
   hips: {
     Hips: [0, -3, 0],
     Head: [2, 5, -4],
-    LeftUpperArm: [0, 25, -62], LeftLowerArm: [0, -95, 0], LeftHand: [0, 0, -20],
-    RightUpperArm: [0, -25, 62], RightLowerArm: [0, 95, 0], RightHand: [0, 0, 20],
+    LeftUpperArm: [60, -10, -65], LeftLowerArm: [0, -120, 0], LeftHand: [-35, 25, -10],
+    RightUpperArm: [60, 10, 65], RightLowerArm: [0, 120, 0], RightHand: [-35, -25, 10],
     LeftUpperLeg: [0, 0, 6], RightUpperLeg: [0, 0, -6],
     ...fingers('Left', { Index: 8, Middle: 10, Ring: 12, Little: 14, Thumb: 5 }),
     ...fingers('Right', { Index: 8, Middle: 10, Ring: 12, Little: 14, Thumb: 5 }),

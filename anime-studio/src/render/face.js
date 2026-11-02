@@ -126,8 +126,8 @@ export class FacePainter {
       const ex = sg * 0.165 * p.eyeSpacing;
       const ey = 0.405 + p.eyeY * 0.05;
       const [cx, cy] = this.L(ex, ey);
-      const w = 0.083 * p.eyeWidth * p.eyeSize * S;
-      const h = 0.088 * p.eyeHeight * p.eyeSize * S * (p.eyeStyle === 'shonen' ? 0.85 : 1);
+      const w = 0.09 * p.eyeWidth * p.eyeSize * S;
+      const h = 0.1 * p.eyeHeight * p.eyeSize * S * (p.eyeStyle === 'shonen' ? 0.8 : 1);
       const iris = {
         top: hexToRgb(p.hetero && sg > 0 ? p.irisTop2 : p.irisTop),
         bot: hexToRgb(p.hetero && sg > 0 ? p.irisBottom2 : p.irisBottom),
@@ -390,7 +390,7 @@ export class FacePainter {
   _brow(ctx, p, sg, cx, cy, w, h, c) {
     const S = this.S;
     const style = p.browStyle;
-    const by = cy - h * 1.38 - p.browY * S * 0.035;
+    const by = cy - h * 1.3 - p.browY * S * 0.035;
     const ang = p.browAngle * 0.25 + (style === 'angry' ? 0.28 : style === 'worried' ? -0.3 : 0);
     const len = w * 1.05;
     const th = S * 0.008 * p.browThick * (style === 'thick' ? 1.7 : style === 'soft' ? 0.85 : 1.05);

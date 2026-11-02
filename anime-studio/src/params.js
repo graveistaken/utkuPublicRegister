@@ -180,7 +180,7 @@ export const SCHEMA = [
   R('render', 'Işık', 'lightHeight', 'Işık yüksekliği', -30, 85, 1, 40, 'mat'),
   C('render', 'Işık', 'lightColor', 'Işık rengi', '#ffffff', 'mat'),
   S('render', 'Sahne', 'bg', 'Arka plan', [['studio', 'Stüdyo'], ['sky', 'Gökyüzü'], ['sunset', 'Gün batımı'], ['night', 'Gece'], ['plain', 'Düz (gri)'], ['green', 'Yeşil ekran']], 'studio', 'view'),
-  S('render', 'Kalite', 'quality', 'Mesh kalitesi', [['low', 'Oyun / mobil (~12k üçgen)'], ['mid', 'Standart (~30k)'], ['high', 'Yüksek (~70k)'], ['ultra', 'Ultra (~150k)']], 'mid'),
+  S('render', 'Kalite', 'quality', 'Mesh kalitesi', [['low', 'Oyun / mobil (~25k üçgen)'], ['mid', 'Standart (~55k)'], ['high', 'Yüksek (~130k)'], ['ultra', 'Ultra (~300k, render için)']], 'mid'),
 ];
 
 export const DEFAULTS = Object.fromEntries(SCHEMA.map((s) => [s.key, s.def]));
@@ -205,15 +205,15 @@ export const CHARACTER_PRESETS = [
     p: { hairStyle: 'bob', ...HAIR_PRESETS.bob, hairColor: '#f39bb6', hairTip: '#ffd1de', hairShade: '#b8506f', hairSpec: '#fff4f8', irisTop: '#2c6e3a', irisBottom: '#9fe08a', top: 'sailor', topColor2: '#25336b', bottomColor: '#25336b', ribbonColor: '#e8344e', headAcc: 'clip', accColor: '#ffd23f', mouth: 'smile' },
   },
   {
-    id: 'rin', name: 'Rin', desc: 'İkiz kuyruklu idol',
-    p: { hairStyle: 'twintails', ...HAIR_PRESETS.twintails, hairColor: '#45c6d6', hairTip: '#b9f3ff', hairShade: '#1f6f8f', irisTop: '#155a7a', irisBottom: '#6ff0ff', top: 'tshirt', topColor: '#2a2a35', topColor2: '#45c6d6', bottom: 'skirt', bottomColor: '#3a3a48', legwear: 'thigh', legwearColor: '#202028', shoes: 'boots', shoeColor: '#202028', tieColor: '#2a2a35', mouth: 'open', eyeStyle: 'round', headAcc: 'none', sleeveLen: 0.15 },
+    id: 'hana', name: 'Hana', desc: 'İkiz kuyruklu idol',
+    p: { hairStyle: 'twintails', ...HAIR_PRESETS.twintails, hairColor: '#b58cff', hairTip: '#ffc4ea', hairShade: '#6a3fb0', hairSpec: '#fff0ff', irisTop: '#7a2a6a', irisBottom: '#ff9ad8', top: 'tshirt', topColor: '#2a2a35', topColor2: '#b58cff', bottom: 'skirt', bottomColor: '#3a3a48', legwear: 'thigh', legwearColor: '#202028', shoes: 'boots', shoeColor: '#202028', tieColor: '#2a2a35', mouth: 'open', eyeStyle: 'round', headAcc: 'none', sleeveLen: 0.15 },
   },
   {
     id: 'yuki', name: 'Yuki', desc: 'Beyaz saçlı sakin büyücü',
     p: { hairStyle: 'long', ...HAIR_PRESETS.long, hairColor: '#eef1fb', hairTip: '#b9c6ff', hairShade: '#8f9bd0', hairSpec: '#ffffff', irisTop: '#5b2a8f', irisBottom: '#d6a0ff', eyeStyle: 'sleepy', top: 'longsleeve', topColor: '#2b2d52', topColor2: '#e6c36a', bottom: 'aline', bottomLen: 0.75, bottomColor: '#2b2d52', legwear: 'tights', legwearColor: '#1a1a26', shoes: 'boots', shoeColor: '#2b2d52', mouth: 'neutral', headAcc: 'none', blush: 0.25, skin: '#fff0ea' },
   },
   {
-    id: 'kaito', name: 'Kaito', desc: 'Enerjik shōnen kahraman',
+    id: 'kenji', name: 'Kenji', desc: 'Enerjik shōnen kahraman',
     p: {
       gender: 1, height: 174, headsTall: 6.9, bust: 0, shoulders: 1.22, chest: 1.12, waist: 1.08, hips: 0.92, thigh: 0.95, muscle: 0.55, weight: 0.3,
       hairStyle: 'spiky', ...HAIR_PRESETS.spiky, hairColor: '#ff7a2f', hairTip: '#ffd36b', hairShade: '#b0361a', irisTop: '#7a2a10', irisBottom: '#ffb347',

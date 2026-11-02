@@ -179,7 +179,7 @@ details.hint li { margin: 6px 0; }
 .viewport { flex: 1; position: relative; min-width: 0; overflow: hidden; }
 .viewport canvas { display: block; width: 100%; height: 100%; touch-action: none; }
 .cam-bar { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); display: flex; gap: 4px; background: rgba(255, 255, 255, 0.72); backdrop-filter: blur(8px); padding: 4px; border-radius: 12px; box-shadow: var(--shadow); }
-.cam-bar button { border: 0; background: transparent; padding: 6px 12px; border-radius: 9px; font-weight: 800; font-size: 12.5px; color: #2b2236; }
+.cam-bar button { white-space: nowrap; border: 0; background: transparent; padding: 6px 12px; border-radius: 9px; font-weight: 800; font-size: 12.5px; color: #2b2236; }
 .cam-bar button:hover { background: rgba(233, 79, 138, 0.14); }
 .stats { position: absolute; left: 12px; bottom: 12px; font-size: 12px; font-weight: 700; color: #2b2236; background: rgba(255, 255, 255, 0.7); backdrop-filter: blur(6px); padding: 5px 10px; border-radius: 9px; }
 .busy {
@@ -199,12 +199,20 @@ body.ready .loader { opacity: 0; pointer-events: none; }
 .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 
 @media (max-width: 860px) {
-  body { overflow: auto; }
-  .layout { flex-direction: column-reverse; }
-  .viewport { flex: none; height: 58vh; }
-  .sidebar { width: 100%; border-right: 0; border-top: 1px solid var(--line); flex: 1; min-height: 50vh; }
-  .rail { width: 64px; }
-  .panel { padding: 4px 16px 40px; }
+  html, body { height: auto; }
+  body { overflow: auto; display: block; }
+  .topbar { position: sticky; top: 0; }
+  .layout { flex-direction: column; display: flex; }
+  .viewport { flex: none; height: 52vh; position: sticky; top: 54px; z-index: 2; order: -1; }
+  .sidebar { width: 100%; border-right: 0; border-top: 1px solid var(--line); flex-direction: column; min-height: 60vh; }
+  .rail {
+    width: 100%; flex-direction: row; overflow-x: auto; border-right: 0; border-bottom: 1px solid var(--line); padding: 6px 8px;
+    position: sticky; top: calc(54px + 52vh); background: var(--panel); z-index: 2;
+  }
+  .rail-btn { min-width: 70px; flex: none; }
+  .panel { overflow: visible; padding: 4px 16px 60px; }
   .brand .sub { display: none; }
   .icon-btn.wide span { display: none; }
+  .cam-bar { top: 8px; }
+  .cam-bar button { padding: 5px 9px; }
 }

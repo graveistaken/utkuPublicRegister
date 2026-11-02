@@ -270,8 +270,8 @@ class App {
     const H = m.height;
     let target, dist;
     if (kind === 'face') {
-      target = new THREE.Vector3(0, H - m.hH * 0.5, 0);
-      dist = m.hH * 5.2;
+      target = new THREE.Vector3(0, H - m.hH * 0.52, 0);
+      dist = m.hH * 5.8;
     } else if (kind === 'upper') {
       target = new THREE.Vector3(0, H - m.hH * 1.4, 0);
       dist = m.hH * 10;
