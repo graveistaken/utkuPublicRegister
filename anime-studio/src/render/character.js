@@ -27,7 +27,8 @@ export const MAT_DEFS = {
   dark: () => ['#25252e', '#15151a'],
 };
 
-const OUTLINE_W = { skin: 0.0011, face: 0.0009, hair: 0.0011, default: 0.0011 };
+const OUTLINE_W = { skin: 0.0007, face: 0.0005, hair: 0.0008, default: 0.0007 };
+const KIND = { skin: 'skin', face: 'face', hair: 'hair', gold: 'shiny', glasses: 'shiny' };
 
 export class CharacterView {
   constructor() {
@@ -36,12 +37,17 @@ export class CharacterView {
     this.mats = {};
     this.outlineMats = {};
     this.face = new FacePainter(2048);
-    this.texOpen = new THREE.CanvasTexture(this.face.open);
-    this.texClosed = new THREE.CanvasTexture(this.face.closed);
-    for (const t of [this.texOpen, this.texClosed]) {
-      t.colorSpace = THREE.SRGBColorSpace;
+    const tex = (c, srgb = true) => {
+      const t = new THREE.CanvasTexture(c);
+      if (srgb) t.colorSpace = THREE.SRGBColorSpace;
       t.anisotropy = 8;
-    }
+      return t;
+    };
+    this.texBase = tex(this.face.base);
+    this.texIris = tex(this.face.iris);
+    this.texOvOpen = tex(this.face.ovOpen);
+    this.texOvClosed = tex(this.face.ovClosed);
+    this.texMask = tex(this.face.mask, false);
     this.pose = 'idle';
     this.animate = true;
     this.blinkT = 2;
@@ -52,7 +58,13 @@ export class CharacterView {
 
   mat(key) {
     if (!this.mats[key]) {
-      const m = key === 'face' ? makeToon({ map: this.texOpen }) : makeToon({ hair: key === 'hair' });
+      const m = key === 'face' ? makeToon({ kind: 'face', map: this.texBase }) : makeToon({ kind: KIND[key] || 'cloth' });
+      if (key === 'face') {
+        const u = m.userData.uniforms;
+        u.uIris.value = this.texIris;
+        u.uOverlay.value = this.texOvOpen;
+        u.uMask.value = this.texMask;
+      }
       m.name = key;
       this.mats[key] = m;
       const o = makeOutline(OUTLINE_W[key] ?? OUTLINE_W.default);
@@ -100,6 +112,9 @@ export class CharacterView {
       g.setAttribute('normal', new THREE.BufferAttribute(part.normals, 3));
       if (part.uvs) g.setAttribute('uv', new THREE.BufferAttribute(part.uvs, 2));
       if (part.hairT) g.setAttribute('hairT', new THREE.BufferAttribute(part.hairT, 1));
+      if (part.hairTan) g.setAttribute('hairTan', new THREE.BufferAttribute(part.hairTan, 3));
+      if (part.blush) g.setAttribute('blush', new THREE.BufferAttribute(part.blush, 1));
+      g.setAttribute('ao', new THREE.BufferAttribute(part.ao || new Float32Array(part.positions.length / 3).fill(1), 1));
       g.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(part.skinIndex, 4));
       g.setAttribute('skinWeight', new THREE.BufferAttribute(part.skinWeight, 4));
       g.setIndex(new THREE.BufferAttribute(part.index, 1));
@@ -109,6 +124,8 @@ export class CharacterView {
       mesh.name = part.name;
       mesh.userData.matKey = part.mat;
       mesh.frustumCulled = false;
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
       armature.add(mesh);
       mesh.bind(skeleton, new THREE.Matrix4());
       this.meshes.push(mesh);
@@ -123,6 +140,10 @@ export class CharacterView {
     }
     this.updateMaterials(params);
     this.applyPose(this.pose);
+    if (this.mats.face) {
+      const r = res.meta.rect;
+      this.mats.face.userData.uniforms.uFaceSize.value.set(r.x1 - r.x0, r.y1 - r.y0);
+    }
   }
 
   updateMaterials(p) {
@@ -132,7 +153,9 @@ export class CharacterView {
       const [c, s] = def(p);
       setShade(m, c, s);
       const u = m.userData.uniforms;
-      u.uRimColor.value.set(key === 'hair' ? p.hairSpec : '#ffffff');
+      u.uRimColor.value.set(key === 'hair' ? p.hairSpec : '#fff6ee');
+      if (u.uBlushCol) u.uBlushCol.value.set(p.blushColor).lerp(new THREE.Color('#ffffff'), 0.25);
+      if (key === 'face') u.uIrisDepth.value = 0.0035 * (p.eyeDepth ?? 1);
       if (key === 'hair') {
         u.uSpec.value.set(p.hairSpec);
         u.uSpecStr.value = p.hairSpecStr;
@@ -140,7 +163,7 @@ export class CharacterView {
         u.uGrad.value = p.hairGrad;
       }
       const o = this.outlineMats[key];
-      if (o) o.userData.uniforms.uTint.value.set(autoShade(c, 0.35));
+      if (o) o.userData.uniforms.uTint.value.set(autoShade(key === 'face' ? p.skinShade : c, key === 'skin' || key === 'face' ? 0.55 : 0.4));
     }
     shared.uSoft.value = p.shadeSoft * 0.5;
     shared.uThreshold.value = 0.2 + p.shadeThreshold * 0.6;
@@ -152,8 +175,7 @@ export class CharacterView {
 
   updateFace(p) {
     this.face.draw(p);
-    this.texOpen.needsUpdate = true;
-    this.texClosed.needsUpdate = true;
+    for (const t of [this.texBase, this.texIris, this.texOvOpen, this.texOvClosed, this.texMask]) t.needsUpdate = true;
   }
 
   applyPose(name) {
@@ -201,10 +223,17 @@ export class CharacterView {
         closed = true;
         if (this.blinkT < -0.12) this.blinkT = 2 + Math.random() * 3.5;
       }
-      if (faceMat) faceMat.map = closed ? this.texClosed : this.texOpen;
+      if (faceMat) {
+        const u = faceMat.userData.uniforms;
+        u.uEyeOpen.value = closed ? 0 : 1;
+        u.uOverlay.value = closed ? this.texOvClosed : this.texOvOpen;
+      }
     } else {
       for (const [n, b] of Object.entries(this.bones)) b.quaternion.copy(this.poseQuat[n]);
-      if (faceMat) faceMat.map = this.texOpen;
+      if (faceMat) {
+        faceMat.userData.uniforms.uEyeOpen.value = 1;
+        faceMat.userData.uniforms.uOverlay.value = this.texOvOpen;
+      }
     }
   }
 }

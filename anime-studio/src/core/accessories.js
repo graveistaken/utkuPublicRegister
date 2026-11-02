@@ -1,7 +1,7 @@
 // Accessories: animal ears, head accessories, glasses, choker, animal tail.
 import { Field } from './mesher.js';
 import { ellipsoid, limb, custom, smax, smin, sdEllipsoid, sdRoundBox, lerp, clamp, v3, basis } from './sdf.js';
-import { fieldPart, rigidWeights, computeWeights } from './partkit.js';
+import { fieldPart, rigidWeights, computeWeights, bakeAO } from './partkit.js';
 
 const TAU = Math.PI * 2;
 
@@ -16,6 +16,7 @@ export function buildAccessories(rig, p, head, body, bodyField, Q, hair) {
     const f = new Field(prims, opts.post ? { post: opts.post } : {});
     const m = fieldPart(f, h, Math.round(budget * Q.mul), h * 0.2);
     if (!m.index.length) return;
+    bakeAO(m, f, 0.006, 0.8);
     if (opts.weightPrims) computeWeights(m, opts.weightPrims, 0.012);
     else rigidWeights(m, bone);
     parts.push({ name, mat, mesh: m });

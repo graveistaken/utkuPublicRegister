@@ -6,7 +6,7 @@ import { buildHead } from './head.js';
 import { buildHair } from './hair.js';
 import { buildOutfit } from './outfit.js';
 import { buildAccessories } from './accessories.js';
-import { fieldPart, computeWeights, splitMesh, compact, simplify } from './partkit.js';
+import { fieldPart, computeWeights, splitMesh, compact, simplify, bakeAO } from './partkit.js';
 
 export const QUALITY = {
   low: { body: 0.0105, head: 60, hand: 0.004, cap: 0.0065, cloth: 0.0095, fine: 0.0045, mul: 0.4, ring: 6, seg: 10 },
@@ -14,6 +14,45 @@ export const QUALITY = {
   high: { body: 0.0052, head: 120, hand: 0.002, cap: 0.0036, cloth: 0.0052, fine: 0.0026, mul: 2.4, ring: 10, seg: 22 },
   ultra: { body: 0.004, head: 160, hand: 0.0015, cap: 0.0028, cloth: 0.004, fine: 0.002, mul: 6, ring: 12, seg: 28 },
 };
+
+// pinkish tint near joints (knees, elbows, knuckles, fingertips, shoulders, ears, nose)
+function blushJoints(rig, head) {
+  const J = rig.J, s = rig.s, list = [];
+  for (const pre of ['left', 'right']) {
+    const k = J[pre + 'LowerLeg'];
+    list.push([[k[0], k[1] + 0.005 * s, k[2] + 0.04 * s], 0.045 * s, 0.9]);
+    const e = J[pre + 'LowerArm'];
+    list.push([[e[0], e[1], e[2] - 0.028 * s], 0.035 * s, 0.7]);
+    const sh = J[pre + 'UpperArm'];
+    list.push([[sh[0], sh[1] + 0.04 * s, sh[2]], 0.05 * s, 0.45]);
+    list.push([J[pre + 'ToeTip'], 0.035 * s, 0.6]);
+    list.push([J[pre + 'Heel'], 0.03 * s, 0.5]);
+    const f = rig.hand[pre].fingers;
+    for (const F of ['Index', 'Middle', 'Ring', 'Little', 'Thumb']) {
+      list.push([f[F][1], 0.011 * s, 0.6]);
+      list.push([f[F][3], 0.013 * s, 0.9]);
+    }
+  }
+  const hh = rig.hH;
+  for (const sg of [-1, 1]) list.push([head.toWorld(sg * 0.38 * head.cw, 0.4, -0.045), 0.09 * hh, 0.7]);
+  list.push([head.toWorld(0, head.nose.y, head.nose.z), 0.06 * hh, 0.45]);
+  return list;
+}
+function addBlush(mesh, joints) {
+  const P = mesh.positions, nv = P.length / 3;
+  const b = new Float32Array(nv);
+  for (let v = 0; v < nv; v++) {
+    let acc = 0;
+    for (const [c, r, w] of joints) {
+      const dx = P[v * 3] - c[0], dy = P[v * 3 + 1] - c[1], dz = P[v * 3 + 2] - c[2];
+      const d2 = (dx * dx + dy * dy + dz * dz) / (r * r);
+      if (d2 < 9) acc += w * Math.exp(-d2);
+    }
+    b[v] = Math.min(1, acc);
+  }
+  mesh.blush = b;
+  return mesh;
+}
 
 const cache = new Map();
 function memo(key, deps, fn) {
@@ -61,6 +100,8 @@ export function buildCharacter(p, groups = 'ABC') {
   const bodyRaw = !doA ? null : T('body', () =>
     memo('body', bodyDeps, () => {
       const m = fieldPart(bodyField, Q.body, Math.round(9000 * Q.mul), Q.body * 0.18);
+      addBlush(m, blushJoints(rig, head));
+      bakeAO(m, bodyField, 0.012, 1.1);
       return computeWeights(m, body.prims, 0.011);
     })
   );
@@ -106,6 +147,21 @@ export function buildCharacter(p, groups = 'ABC') {
         uvs[v * 2 + 1] = (P[v * 3 + 1] - r.y0) / (r.y1 - r.y0);
       }
       m.uvs = uvs;
+      // anime face normals: blend toward a smooth ellipsoid so the face shades cleanly
+      for (let v = 0; v < nv; v++) {
+        const l = head.toLocal(P[v * 3], P[v * 3 + 1], P[v * 3 + 2]);
+        const w = Math.min(1, Math.max(0, (l[2] + 0.05) / 0.3)) * (1 - Math.min(1, Math.max(0, (l[1] - 0.7) / 0.2))) * (1 - Math.min(1, Math.max(0, (Math.abs(l[0]) - 0.3) / 0.08)));
+        if (w <= 0) continue;
+        let sx = l[0] / 0.36, sy = (l[1] - 0.42) / 0.5, sz = (l[2] + 0.1) / 0.42;
+        const sl = Math.hypot(sx, sy, sz) || 1;
+        sx /= sl; sy /= sl; sz /= sl;
+        const k = 0.8 * w;
+        let nx = N[v * 3] * (1 - k) + sx * k, ny = N[v * 3 + 1] * (1 - k) + sy * k, nz = N[v * 3 + 2] * (1 - k) + sz * k;
+        const nl = Math.hypot(nx, ny, nz) || 1;
+        N[v * 3] = nx / nl; N[v * 3 + 1] = ny / nl; N[v * 3 + 2] = nz / nl;
+      }
+      addBlush(m, blushJoints(rig, head));
+      bakeAO(m, new Field([head.prim, ...body.prims.filter((q) => q.tag === 'neck' || q.tag === 'torso')]), 0.008, 0.9);
       const nmesh = computeWeights(m, [head.prim, ...body.prims.filter((q) => q.tag === 'neck')], 0.01);
       const O = head.O;
       const isFace = (v) => N[v * 3 + 2] > 0.12 && P[v * 3 + 2] > O[2] + 0.05 * rig.hH && uvs[v * 2 + 1] > 0.0 && uvs[v * 2 + 1] < 0.92 && uvs[v * 2] > 0.04 && uvs[v * 2] < 0.96;
@@ -119,6 +175,8 @@ export function buildCharacter(p, groups = 'ABC') {
       [1, -1].map((sg) => {
         const prims = buildHandPrims(rig, p, sg);
         const m = fieldPart(new Field(prims), Q.hand, Math.round(2200 * Q.mul), Q.hand * 0.2);
+        addBlush(m, blushJoints(rig, head));
+        bakeAO(m, new Field(prims), 0.005, 1.0);
         return computeWeights(m, prims, 0.006);
       })
     )

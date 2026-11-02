@@ -183,14 +183,14 @@ export class UI {
   buildExport(page) {
     const box = el('div', 'export');
     box.innerHTML = `
-      <p class="hint">Modelin iskeleti (Humanoid), ağırlıkları ve materyalleriyle birlikte dışa aktarılır. Unity, Unreal, Godot, Blender ve VRChat/VTuber araçlarında kullanılabilir.</p>
+      <p class="hint">Modelin iskeleti (Humanoid), ağırlıkları ve materyalleriyle birlikte dışa aktarılır. PNG görsel ekrandaki render kalitesiyle (gölgeler ve efektler dahil) kaydedilir. Unity, Unreal, Godot, Blender ve VRChat/VTuber araçlarında kullanılabilir.</p>
       <div class="stat-grid" id="exportStats"></div>
       <label class="field"><span>Karakter adı</span><input id="charName" value="AnimeKarakter" maxlength="40"></label>
       <label class="field"><span>Yazar</span><input id="charAuthor" value="" maxlength="40" placeholder="İsmin"></label>
       <div class="actions col">
         <button class="btn primary" data-act="glb">⬇ GLB indir (Blender / Unity / Godot / Unreal)</button>
         <button class="btn primary" data-act="vrm">⬇ VRM 1.0 indir (VRChat, VTuber, UniVRM)</button>
-        <button class="btn" data-act="png">🖼 PNG görsel (şeffaf arka plan)</button>
+        <button class="btn" data-act="png">🖼 PNG görsel (render)</button>
         <button class="btn" data-act="json">💾 Karakteri kaydet (.json)</button>
         <button class="btn" data-act="load">📂 Karakter yükle (.json)</button>
       </div>

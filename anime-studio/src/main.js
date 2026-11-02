@@ -1,5 +1,9 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
+import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import './style.css';
 import { DEFAULTS, SCHEMA, applyHairPreset, HAIR_PRESETS } from './params.js';
 import { CharacterView } from './render/character.js';
@@ -12,14 +16,37 @@ import { saveFile } from './save.js';
 const SCHEMA_BY_KEY = Object.fromEntries(SCHEMA.map((s) => [s.key, s]));
 const FACE_DEPS = new Set(['skin', 'skinShade', 'hairColor']);
 
+// background: [type, stops], hemisphere fill [sky, ground]
 const BGS = {
-  studio: 'radial-gradient(ellipse at 50% 35%, #fdf6ff 0%, #ead9f2 45%, #b9a6cf 100%)',
-  sky: 'linear-gradient(180deg, #8ec9ff 0%, #cfe8ff 55%, #fff6e6 100%)',
-  sunset: 'linear-gradient(180deg, #3b2a6b 0%, #c9608a 50%, #ffc58a 100%)',
-  night: 'radial-gradient(ellipse at 50% 30%, #2b3168 0%, #141633 60%, #07081a 100%)',
-  plain: 'linear-gradient(180deg, #d9dbe2 0%, #b9bcc7 100%)',
-  green: '#00b140',
+  studio: { kind: 'radial', stops: [[0, '#fdf8ff'], [0.5, '#eadcf2'], [1, '#ad9ac6']], sky: '#f6f0ff', ground: '#d6c6da' },
+  sky: { kind: 'linear', stops: [[0, '#86c3ff'], [0.55, '#cfe7ff'], [1, '#fff4e2']], sky: '#e9f4ff', ground: '#e6dccb' },
+  sunset: { kind: 'linear', stops: [[0, '#3a2a6a'], [0.5, '#c8608a'], [1, '#ffc58a']], sky: '#ffd8c4', ground: '#9a6a9a' },
+  night: { kind: 'radial', stops: [[0, '#2f3670'], [0.6, '#151838'], [1, '#07081a']], sky: '#b8c4ff', ground: '#4a4a80' },
+  plain: { kind: 'linear', stops: [[0, '#e1e3e9'], [1, '#b6b9c4']], sky: '#f2f2f5', ground: '#c8c8d0' },
+  green: { kind: 'flat', stops: [[0, '#00b140']], sky: '#f4fff4', ground: '#c8d8c8' },
 };
+
+function bgTexture(def) {
+  const c = document.createElement('canvas');
+  c.width = c.height = 512;
+  const x = c.getContext('2d');
+  let g;
+  if (def.kind === 'radial') g = x.createRadialGradient(256, 190, 0, 256, 256, 420);
+  else g = x.createLinearGradient(0, 0, 0, 512);
+  for (const [o, col] of def.stops) g.addColorStop(o, col);
+  x.fillStyle = def.kind === 'flat' ? def.stops[0][1] : g;
+  x.fillRect(0, 0, 512, 512);
+  // fine film grain hides gradient banding
+  const img = x.getImageData(0, 0, 512, 512);
+  for (let i = 0; i < img.data.length; i += 4) {
+    const n = (Math.random() - 0.5) * 3;
+    img.data[i] += n; img.data[i + 1] += n; img.data[i + 2] += n;
+  }
+  x.putImageData(img, 0, 0);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
 
 class App {
   constructor() {
@@ -31,9 +58,13 @@ class App {
 
     const vp = document.getElementById('viewport');
     this.vp = vp;
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
+    const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.toneMapping = THREE.NoToneMapping;
+    renderer.toneMappingExposure = 1.0;
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFShadowMap;
     vp.appendChild(renderer.domElement);
     this.renderer = renderer;
 
@@ -67,9 +98,38 @@ class App {
     ground.position.y = 0.001;
     scene.add(ground);
     this.ground = ground;
+    // floor that receives the character's cast shadow
+    const floor = new THREE.Mesh(new THREE.CircleGeometry(2.2, 48), new THREE.ShadowMaterial({ color: '#3a2050', opacity: 0.2 }));
+    floor.rotation.x = -Math.PI / 2;
+    floor.receiveShadow = true;
+    scene.add(floor);
+    this.floor = floor;
+
+    // key light (camera-relative direction, casts shadows: hair on face, arms on body, body on floor)
+    const sun = new THREE.DirectionalLight('#ffffff', 1.0);
+    sun.castShadow = true;
+    sun.shadow.mapSize.set(2048, 2048);
+    sun.shadow.bias = -0.0004;
+    sun.shadow.normalBias = 0.012;
+    sun.shadow.radius = 2.5;
+    const sc2 = sun.shadow.camera;
+    sc2.near = 0.1;
+    sc2.far = 8;
+    scene.add(sun, sun.target);
+    this.sun = sun;
 
     this.view = new CharacterView();
     scene.add(this.view.root);
+
+    // post-processing: MSAA -> soft bloom -> output (AO is baked per vertex in the builder)
+    const rt = new THREE.WebGLRenderTarget(16, 16, { samples: 4, type: THREE.HalfFloatType });
+    const composer = new EffectComposer(renderer, rt);
+    composer.addPass(new RenderPass(scene, camera));
+    const bloom = new UnrealBloomPass(new THREE.Vector2(16, 16), 0.22, 0.55, 0.88);
+    composer.addPass(bloom);
+    composer.addPass(new OutputPass());
+    this.composer = composer;
+    this.bloom = bloom;
 
     this.ui = new UI(document.getElementById('sidebar'), this);
     this.ui.sync(this.params);
@@ -243,6 +303,7 @@ class App {
     const m = msg.res.meta;
     this.ground.scale.setScalar(m.height / 1.6);
     this.ground.position.y = this.params.shoes !== 'none' ? -0.011 : 0.001;
+    this.floor.position.y = this.ground.position.y - 0.0008;
     document.getElementById('stats').textContent = `${m.tris.toLocaleString('tr-TR')} üçgen · ${msg.res.bones.length} kemik · ${m.ms} ms`;
     const es = document.getElementById('exportStats');
     if (es) es.innerHTML = `<div><b>${m.tris.toLocaleString('tr-TR')}</b><span>üçgen</span></div><div><b>${msg.res.bones.length}</b><span>kemik</span></div><div><b>${msg.res.parts.length}</b><span>parça</span></div><div><b>${(m.height * 100).toFixed(0)} cm</b><span>boy</span></div>`;
@@ -255,8 +316,20 @@ class App {
 
   // --- view -----------------------------------------------------------
   applyView() {
-    this.vp.style.background = BGS[this.params.bg] || BGS.studio;
+    const bg = BGS[this.params.bg] || BGS.studio;
+    if (this.bgKey !== this.params.bg) {
+      if (this.scene.background) this.scene.background.dispose();
+      this.scene.background = bgTexture(bg);
+      this.bgKey = this.params.bg;
+    }
+    shared.uSky.value.set(bg.sky);
+    shared.uGround.value.set(bg.ground);
     this.view.animate = this.params.animate;
+    const fx = this.params.fx !== false;
+    this.bloom.enabled = fx;
+    this.sun.castShadow = this.params.shadows !== false;
+    this.floor.visible = this.params.shadows !== false;
+    shared.uShadowStr.value = this.params.shadows !== false ? 1 : 0;
     this.updateLight();
   }
   updateLight() {
@@ -292,6 +365,9 @@ class App {
   resize() {
     const w = this.vp.clientWidth, h = this.vp.clientHeight;
     this.renderer.setSize(w, h);
+    const pr = this.renderer.getPixelRatio();
+    this.composer.setPixelRatio(pr);
+    this.composer.setSize(w, h);
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
   }
@@ -308,8 +384,23 @@ class App {
     if (this.params.turntable) this.view.root.rotation.y += dt * 0.5;
     this.controls.update();
     this.view.update(dt);
-    if (this.lightView) shared.uLightDir.value.copy(this.lightView);
-    this.renderer.render(this.scene, this.camera);
+    if (this.lightView) {
+      shared.uLightDir.value.copy(this.lightView);
+      // world-space light for the shadow map (same direction as the toon light)
+      const m = this.view.meta;
+      const H = m ? m.height : 1.6;
+      const dirW = this.lightView.clone().transformDirection(this.camera.matrixWorld);
+      const c = new THREE.Vector3(0, H * 0.5, 0);
+      this.sun.position.copy(c).addScaledVector(dirW, 4);
+      this.sun.target.position.copy(c);
+      const e = H * 0.62;
+      const sc = this.sun.shadow.camera;
+      if (sc.right !== e) {
+        sc.left = -e; sc.right = e; sc.top = e; sc.bottom = -e;
+        sc.updateProjectionMatrix();
+      }
+    }
+    this.composer.render(dt);
   }
 
   toast(msg) {
@@ -336,11 +427,8 @@ class App {
         const buf = await exportVRM(this.view, this.params, { name, author });
         msg = await saveFile(new Blob([buf], { type: 'application/octet-stream' }), fname + '.vrm');
       } else if (kind === 'png') {
-        const ground = this.ground.visible;
-        this.ground.visible = false;
-        this.renderer.render(this.scene, this.camera);
+        this.composer.render(0);
         const blob = await new Promise((r) => this.renderer.domElement.toBlob(r, 'image/png'));
-        this.ground.visible = ground;
         msg = await saveFile(blob, fname + '.png');
       } else if (kind === 'json') {
         msg = await saveFile(new Blob([JSON.stringify({ app: 'AnimeForge', version: 1, name, params: this.params }, null, 2)], { type: 'application/json' }), fname + '.json');

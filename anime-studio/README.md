@@ -42,7 +42,14 @@ Modeller hazır parçalardan değil, parametrelerden **her seferinde sıfırdan 
 4. **Saç** (`hair.js`): Kafayı saran bir saç kabuğu + kafa ve omuzlarla çarpışarak dökülen, sivri uçlu hacimli tutamlar.
 5. **Kıyafet** (`outfit.js`): Vücut SDF'inden şişirilip kırpılan kumaş kabukları; pileli etek ise vücuda göre ışın atılarak oturtulan parametrik bir yüzey. Kıyafetin altında kalan vücut üçgenleri silinir (daha az poligon, kumaştan taşma yok).
 6. **Yüz** (`render/face.js`): Gözler, kaşlar, ağız ve allık 2048 px'lik bir dokuya çizilip yüze yansıtılır (anime oyun modellerindeki doku-tabanlı yüz tekniği).
-7. **Görüntü** (`render/materials.js`): Renkli gölgeli cel shading, kenar ışığı, saç “melek halkası” ve ters-kabuk (inverted hull) konturlar.
+7. **Görüntü** (`render/materials.js`): Blender/Eevee anime kurulumlarındaki teknikler:
+   - Renkli, yumuşak geçişli cel shading ve gerçek gölge haritası (saçın yüze, kolların gövdeye, karakterin zemine düşen gölgesi)
+   - SDF'ten köşe başına önceden hesaplanmış ortam gölgesi (AO)
+   - Eklemlerde (diz, dirsek, parmak, kulak) pembe ten tonu ve ışık-gölge sınırında sıcak "deri altı" bandı
+   - Küreye yumuşatılmış yüz normalleri (temiz anime yüz gölgesi)
+   - Paralaks ile içe gömük 3D iris
+   - Saçta tel yönünde Kajiya-Kay parlaması ve ince tel çizgileri
+   - Kumaşta mikro doku, ılık/soğuk kenar ışıkları, yerel renkte ince konturlar, MSAA ve hafif bloom
 
 Üretim üç Web Worker'da paralel yapılır (vücut / kıyafet / kafa + saç), değişmeyen parçalar önbellekten gelir.
 

@@ -216,11 +216,37 @@ export function buildHair(rig, p, head, bodyField, Q) {
     }
   }
 
+  // ---------- fine wisps layered on top of the main clumps ----------
+  {
+    const base = strands.slice();
+    const wispMul = Q.mul >= 1 ? 1 : 0.5;
+    for (const st of base) {
+      if (!['bangs', 'side', 'back', 'tail'].includes(st.group)) continue;
+      // long locks get fewer, wider wisps so they read as flowing sheets
+      const long = st.L > 1.3;
+      const n = Math.round((st.group === 'bangs' ? 1 : long ? 1 : 2) * wispMul);
+      for (let k = 0; k < n; k++) {
+        const off = [jit(0.035 * hH), jit(0.02 * hH), jit(0.035 * hH)];
+        strands.push({
+          ...st,
+          root: v3.add(st.root, off),
+          dir: v3.add(st.dir, [jit(0.25), jit(0.1), jit(0.25)]),
+          W: st.W * (long ? 0.55 + R() * 0.15 : 0.32 + R() * 0.18),
+          L: st.L * (st.group === 'bangs' ? 0.9 + R() * 0.15 : 0.82 + R() * 0.3),
+          wisp: true,
+          lift: 0.006 * hH,
+          blunt: 0,
+          ahoge: false,
+        });
+      }
+    }
+  }
+
   // ---------- integrate strands ----------
   const SEG = Q.seg;
-  const RING = Q.ring;
+  const RING0 = Q.ring;
   const meshes = [];
-  const pos = [], nrm = [], uv = [], ht = [], idx = [];
+  const pos = [], nrm = [], uv = [], ht = [], idx = [], tan = [], aoA = [];
   const localPhi = (x, y, z) => {
     const l = head.toLocal(x, y, z);
     const d = v3.norm(v3.sub(l, Cc));
@@ -250,7 +276,9 @@ export function buildHair(rig, p, head, bodyField, Q) {
       mark(sp, capOff);
     }
 
+  let strandId = 0;
   for (const st of strands) {
+    strandId += 1;
     const N = st.group === 'ahoge' || st.group === 'crown' || st.group === 'top' || st.group === 'bun' ? Math.max(6, Math.round(SEG * 0.6)) : SEG;
     const Lw = st.L * hH;
     const ds = Lw / N;
@@ -293,7 +321,7 @@ export function buildHair(rig, p, head, bodyField, Q) {
         d = v3.norm(v3.add(d, v3.mul(out, st.flip * 0.35)));
       }
       let q = v3.add(P, v3.mul(d, ds));
-      const clear = thick(t) * 0.55 + 0.0008;
+      const clear = thick(t) * 0.55 + 0.0008 + (st.lift || 0) * Math.min(1, t * 4);
       for (let k = 0; k < 3; k++) {
         const c = collide(q[0], q[1], q[2]) - clear;
         if (c >= 0) break;
@@ -341,6 +369,7 @@ export function buildHair(rig, p, head, bodyField, Q) {
         pts[i] = v3.add(pts[i], v3.mul(B[i], a));
       }
     }
+    const RING = st.wisp ? Math.max(5, RING0 - 2) : RING0;
     if (st.group !== 'tail' && st.group !== 'ahoge') for (let i = 0; i < N; i++) mark(pts[i], thick(i / N) * 1.3);
     // build tube
     const base = pos.length / 3;
@@ -357,23 +386,29 @@ export function buildHair(rig, p, head, bodyField, Q) {
         pos.push(...vp);
         const nn = v3.norm(v3.add(v3.mul(B[i], ca / Math.max(w, 1e-5)), v3.mul(Nn[i], (sa / Math.max(th * ty, 1e-5)))));
         nrm.push(...nn);
-        uv.push(u0 + (j / RING) * 0.01, phiU);
+        uv.push(strandId + j / RING, phiU);
         ht.push(t);
+        tan.push(...T[i]);
+        aoA.push((st.free ? 0.8 + 0.2 * Math.min(1, t * 3) : 0.55 + 0.45 * Math.min(1, t * 2.2)) * (sa < -0.2 ? 0.82 : 1) * (st.wisp ? 1.08 : 1));
       }
     }
     // tip
     const tip = base + N * RING;
     pos.push(...pts[N]);
     nrm.push(...T[N]);
-    const [ut, pt] = localPhi(...pts[N]);
-    uv.push(ut, pt);
+    const [, pt] = localPhi(...pts[N]);
+    uv.push(strandId + 0.5, pt);
     ht.push(1);
+    tan.push(...T[N]);
+    aoA.push(1);
     // root cap centre
     const rootC = tip + 1;
     pos.push(...pts[0]);
     nrm.push(...v3.mul(T[0], -1));
-    uv.push(...localPhi(...pts[0]));
+    uv.push(strandId + 0.5, localPhi(...pts[0])[1]);
     ht.push(0);
+    tan.push(...T[0]);
+    aoA.push(0.5);
     for (let i = 0; i < N - 1; i++)
       for (let j = 0; j < RING; j++) {
         const a = base + i * RING + j, b = base + i * RING + ((j + 1) % RING);
@@ -392,6 +427,8 @@ export function buildHair(rig, p, head, bodyField, Q) {
     normals: new Float32Array(nrm),
     uvs: new Float32Array(uv),
     hairT: new Float32Array(ht),
+    hairTan: new Float32Array(tan),
+    ao: new Float32Array(aoA.map((a) => Math.min(1, a))),
     index: new Uint32Array(idx),
   };
   fixWinding(strandMesh);
@@ -421,9 +458,15 @@ export function buildHair(rig, p, head, bodyField, Q) {
     const nv = cap.positions.length / 3;
     cap.uvs = new Float32Array(nv * 2);
     cap.hairT = new Float32Array(nv);
+    cap.hairTan = new Float32Array(nv * 3);
+    cap.ao = new Float32Array(nv).fill(0.62);
     for (let v = 0; v < nv; v++) {
+      // tangent: meridian direction (crown -> nape) on the cap surface
+      const n = [cap.normals[v * 3], cap.normals[v * 3 + 1], cap.normals[v * 3 + 2]];
+      const m = v3.norm(v3.sub([0, -1, 0], v3.mul(n, -n[1])));
+      cap.hairTan[v * 3] = m[0]; cap.hairTan[v * 3 + 1] = m[1]; cap.hairTan[v * 3 + 2] = m[2];
       const [u, ph] = localPhi(cap.positions[v * 3], cap.positions[v * 3 + 1], cap.positions[v * 3 + 2]);
-      cap.uvs[v * 2] = u;
+      cap.uvs[v * 2] = 1000 + u * 9;
       cap.uvs[v * 2 + 1] = ph;
     }
   }

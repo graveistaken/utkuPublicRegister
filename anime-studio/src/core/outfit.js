@@ -1,7 +1,7 @@
 // Clothing: SDF shells derived from the body + parametric pleated skirt.
 import { Field } from './mesher.js';
 import { smax, smin, lerp, clamp, sdEllipsoid, sdRoundBox, ellipsoid, limb, custom, v3 } from './sdf.js';
-import { fieldPart, computeWeights, compact, simplify } from './partkit.js';
+import { fieldPart, computeWeights, compact, simplify, bakeAO } from './partkit.js';
 
 const TAU = Math.PI * 2;
 
@@ -38,6 +38,7 @@ export function buildOutfit(rig, p, body, bodyField, Q, { coversOnly = false } =
     const m = fieldPart(field, h, Math.round(budget * Q.mul), h * 0.2);
     if (globalThis.__prof) console.log(name, Math.round(performance.now() - t0), 'ms');
     if (!m.index.length) return null;
+    bakeAO(m, opts.aoField || field, 0.01, 0.9);
     computeWeights(m, opts.weightPrims || allW, opts.sigma ?? 0.014);
     parts.push({ name, mat, mesh: m });
     return m;
@@ -497,6 +498,15 @@ function buildSkirt(rig, p, body, Q, opts) {
   }
   const NV = innerStart;
   const mesh = { positions: new Float32Array(pos), index: new Uint32Array(idx) };
+  {
+    const nvv = pos.length / 3;
+    const ao = new Float32Array(nvv);
+    for (let v = 0; v < nvv; v++) {
+      const t = clamp((yTop - pos[v * 3 + 1]) / (yTop - yHem + 1e-5), 0, 1);
+      ao[v] = v >= innerStart && v < rimBase ? 0.5 + 0.2 * t : v >= rimBase ? 0.8 : 0.78 + 0.22 * Math.min(1, t * 2.5);
+    }
+    mesh.ao = ao;
+  }
   // orientation: outer faces outward
   computeNormalsFlatAware(mesh, NV);
   // weights

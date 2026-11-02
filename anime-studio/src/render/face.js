@@ -31,22 +31,73 @@ function lighten(c, t) {
 export class FacePainter {
   constructor(size = 2048) {
     this.S = size;
-    this.open = document.createElement('canvas');
-    this.closed = document.createElement('canvas');
-    this.open.width = this.open.height = size;
-    this.closed.width = this.closed.height = size;
+    const mk = (n) => {
+      const c = document.createElement('canvas');
+      c.width = c.height = n;
+      return c;
+    };
+    this.base = mk(size); // skin, brows, mouth, blush (shared by open/closed)
+    this.iris = mk(size); // sclera + iris, sampled with parallax
+    this.ovOpen = mk(size); // lid shadow, highlights, lashes
+    this.ovClosed = mk(size); // closed-eye lines
+    this.mask = mk(size / 2); // where the iris layer is visible
+    this._flat = {};
   }
 
   draw(p) {
-    this._draw(this.open.getContext('2d'), p, false);
-    this._draw(this.closed.getContext('2d'), p, true);
+    const S = this.S;
+    const bc = this.base.getContext('2d');
+    const ic = this.iris.getContext('2d');
+    const oo = this.ovOpen.getContext('2d');
+    const oc = this.ovClosed.getContext('2d');
+    const mc = this.mask.getContext('2d');
+    for (const c of [ic, oo, oc]) {
+      c.setTransform(1, 0, 0, 1, 0, 0);
+      c.clearRect(0, 0, S, S);
+      c.lineCap = 'round';
+      c.lineJoin = 'round';
+    }
+    mc.setTransform(1, 0, 0, 1, 0, 0);
+    mc.clearRect(0, 0, S, S);
+    mc.setTransform(0.5, 0, 0, 0.5, 0, 0);
+    this._draw(bc, p, { iris: ic, ov: oo, mask: mc, closed: oc });
+    this._flat = {};
+  }
+
+  // flattened face (for export / fallback)
+  flat(closed) {
+    const key = closed ? 'c' : 'o';
+    if (this._flat[key]) return this._flat[key];
+    const S = this.S;
+    const out = document.createElement('canvas');
+    out.width = out.height = S;
+    const x = out.getContext('2d');
+    x.drawImage(this.base, 0, 0);
+    if (!closed) {
+      const t = document.createElement('canvas');
+      t.width = t.height = S;
+      const tx = t.getContext('2d');
+      tx.drawImage(this.iris, 0, 0);
+      tx.globalCompositeOperation = 'destination-in';
+      tx.drawImage(this.mask, 0, 0, S, S);
+      x.drawImage(t, 0, 0);
+    }
+    x.drawImage(closed ? this.ovClosed : this.ovOpen, 0, 0);
+    this._flat[key] = out;
+    return out;
+  }
+  get open() {
+    return this.flat(false);
+  }
+  get closed() {
+    return this.flat(true);
   }
 
   L(x, y) {
     return [(x + 0.5) * this.S, (1 - (y + 0.06)) * this.S];
   }
 
-  _draw(ctx, p, closed) {
+  _draw(ctx, p, layers) {
     const S = this.S;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, S, S);
@@ -134,8 +185,8 @@ export class FacePainter {
       };
       // sg>0 is canvas right = character's left eye; outer corner = +x for sg>0
       this._brow(ctx, p, sg, cx, cy, w, h, browC);
-      if (closed) this._closedEye(ctx, p, st, sg, cx, cy, w, h, lash);
-      else this._eye(ctx, p, st, sg, cx, cy, w, h, iris, lash, skinShade);
+      this._closedEye(layers.closed, p, st, sg, cx, cy, w, h, lash);
+      this._eye(layers, p, st, sg, cx, cy, w, h, iris, lash, skinShade);
     }
 
     // ---- mole ----
@@ -173,77 +224,96 @@ export class FacePainter {
     }
   }
 
-  _eye(ctx, p, st, sg, cx, cy, w, h, iris, lash, skinShade) {
+  _eye(Lx, p, st, sg, cx, cy, w, h, iris, lash, skinShade) {
     const S = this.S;
     const s = this._shape(st, p, w, h);
-    ctx.save();
-    ctx.translate(cx, cy);
-    ctx.scale(sg, 1);
+    const ctx = Lx.ov, ic = Lx.iris, mk = Lx.mask;
+    const prep = (c) => {
+      c.save();
+      c.translate(cx, cy);
+      c.scale(sg, 1);
+    };
+    const eyePath = (c) => {
+      c.beginPath();
+      this._upperPath(c, s);
+      this._lowerPath(c, s);
+      c.closePath();
+    };
+    // mask (where the iris layer shows through)
+    prep(mk);
+    eyePath(mk);
+    mk.fillStyle = '#ffffff';
+    mk.fill();
+    mk.restore();
 
-    // sclera
-    ctx.beginPath();
-    this._upperPath(ctx, s);
-    this._lowerPath(ctx, s);
-    ctx.closePath();
-    ctx.save();
-    ctx.clip();
+    // iris layer: sclera colour over a generous area + iris (sampled with parallax in the shader)
+    prep(ic);
     const scl = hexToRgb(p.sclera);
-    ctx.fillStyle = rgb(scl);
-    ctx.fillRect(-w * 2, -h * 2, w * 4, h * 4);
-
+    const sg2 = ic.createRadialGradient(0, h * 0.2, w * 0.2, 0, h * 0.2, w * 1.3);
+    sg2.addColorStop(0, rgb(scl));
+    sg2.addColorStop(1, rgb(mix(scl, skinShade, 0.35)));
+    ic.fillStyle = sg2;
+    ic.fillRect(-w * 1.6, -h * 1.6, w * 3.2, h * 3.2);
     // iris
     const irx = w * 0.6 * p.irisSize * (p.eyeStyle === 'shonen' ? 0.85 : 1);
     const iry = h * 0.92 * p.irisSize;
     const icx = w * 0.0, icy = h * st.irisY;
-    ctx.save();
-    ctx.translate(icx, icy);
-    ctx.scale(sg, 1); // undo mirror so gradients/highlights are consistent
-    const grd = ctx.createLinearGradient(0, -iry, 0, iry);
+    ic.save();
+    ic.translate(icx, icy);
+    ic.scale(sg, 1); // undo mirror so gradients/highlights are consistent
+    const grd = ic.createLinearGradient(0, -iry, 0, iry);
     grd.addColorStop(0, rgb(shade(iris.top, 0.55)));
     grd.addColorStop(0.35, rgb(iris.top));
     grd.addColorStop(0.75, rgb(mix(iris.top, iris.bot, 0.75)));
     grd.addColorStop(1, rgb(lighten(iris.bot, 0.15)));
-    ctx.fillStyle = grd;
-    ctx.beginPath();
-    ctx.ellipse(0, 0, irx, iry, 0, 0, Math.PI * 2);
-    ctx.fill();
+    ic.fillStyle = grd;
+    ic.beginPath();
+    ic.ellipse(0, 0, irx, iry, 0, 0, Math.PI * 2);
+    ic.fill();
     // lower glow crescent
-    const glow = ctx.createRadialGradient(0, iry * 0.55, 0, 0, iry * 0.55, irx * 1.05);
+    const glow = ic.createRadialGradient(0, iry * 0.55, 0, 0, iry * 0.55, irx * 1.05);
     glow.addColorStop(0, rgb(lighten(iris.bot, 0.45), 0.85));
     glow.addColorStop(1, rgb(iris.bot, 0));
-    ctx.fillStyle = glow;
-    ctx.beginPath();
-    ctx.ellipse(0, iry * 0.35, irx * 0.82, iry * 0.6, 0, 0, Math.PI * 2);
-    ctx.fill();
+    ic.fillStyle = glow;
+    ic.beginPath();
+    ic.ellipse(0, iry * 0.35, irx * 0.82, iry * 0.6, 0, 0, Math.PI * 2);
+    ic.fill();
     // radial texture lines
-    ctx.strokeStyle = rgb(shade(iris.top, 0.6), 0.35);
-    ctx.lineWidth = S * 0.0016;
+    ic.strokeStyle = rgb(shade(iris.top, 0.6), 0.35);
+    ic.lineWidth = S * 0.0016;
     for (let i = 0; i < 18; i++) {
       const a = (i / 18) * Math.PI * 2;
-      ctx.beginPath();
-      ctx.moveTo(Math.cos(a) * irx * 0.35, Math.sin(a) * iry * 0.35);
-      ctx.lineTo(Math.cos(a) * irx * 0.85, Math.sin(a) * iry * 0.85);
-      ctx.stroke();
+      ic.beginPath();
+      ic.moveTo(Math.cos(a) * irx * 0.35, Math.sin(a) * iry * 0.35);
+      ic.lineTo(Math.cos(a) * irx * 0.85, Math.sin(a) * iry * 0.85);
+      ic.stroke();
     }
     // pupil
     const pr = p.pupilSize;
     if (p.pupilShape !== 'none' && pr > 0.01) {
-      ctx.fillStyle = rgb(shade(iris.top, 0.28));
-      ctx.beginPath();
-      if (p.pupilShape === 'slit') ctx.ellipse(0, -iry * 0.04, irx * 0.12 * pr, iry * 0.62 * Math.min(pr, 1.2), 0, 0, Math.PI * 2);
-      else if (p.pupilShape === 'star') this._star(ctx, 0, -iry * 0.05, irx * 0.42 * pr, irx * 0.17 * pr, 5);
-      else if (p.pupilShape === 'heart') this._heart(ctx, 0, -iry * 0.05, irx * 0.5 * pr);
-      else ctx.ellipse(0, -iry * 0.06, irx * 0.36 * pr, iry * 0.42 * pr, 0, 0, Math.PI * 2);
-      ctx.fill();
+      ic.fillStyle = rgb(shade(iris.top, 0.28));
+      ic.beginPath();
+      if (p.pupilShape === 'slit') ic.ellipse(0, -iry * 0.04, irx * 0.12 * pr, iry * 0.62 * Math.min(pr, 1.2), 0, 0, Math.PI * 2);
+      else if (p.pupilShape === 'star') this._star(ic, 0, -iry * 0.05, irx * 0.42 * pr, irx * 0.17 * pr, 5);
+      else if (p.pupilShape === 'heart') this._heart(ic, 0, -iry * 0.05, irx * 0.5 * pr);
+      else ic.ellipse(0, -iry * 0.06, irx * 0.36 * pr, iry * 0.42 * pr, 0, 0, Math.PI * 2);
+      ic.fill();
     }
     // iris rim
-    ctx.strokeStyle = rgb(shade(iris.top, 0.45), 0.9);
-    ctx.lineWidth = S * 0.004;
-    ctx.beginPath();
-    ctx.ellipse(0, 0, irx, iry, 0, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.restore();
+    ic.strokeStyle = rgb(shade(iris.top, 0.45), 0.9);
+    ic.lineWidth = S * 0.004;
+    ic.beginPath();
+    ic.ellipse(0, 0, irx, iry, 0, 0, Math.PI * 2);
+    ic.stroke();
+    ic.restore();
 
+    ic.restore();
+
+    // overlay: lid shadow + highlights clipped to the eye, then crease and lashes
+    prep(ctx);
+    eyePath(ctx);
+    ctx.save();
+    ctx.clip();
     // upper lid shadow on sclera + iris
     const sh = ctx.createLinearGradient(0, s.T[1], 0, s.T[1] + h * 0.85);
     const shc = mix(shade(hexToRgb(p.irisTop), 0.6), skinShade, 0.4);
@@ -290,11 +360,6 @@ export class FacePainter {
     }
     ctx.restore();
     ctx.restore(); // end clip
-
-    // sleepy lid (covers top of eye with skin)
-    if (st.lid > 0) {
-      // already accounted by low top point
-    }
 
     // double eyelid crease
     if (st.crease > 0) {

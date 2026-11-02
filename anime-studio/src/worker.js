@@ -11,7 +11,7 @@ async function run(msg) {
     const res = buildCharacter(msg.params, msg.groups || 'ABC');
     const transfer = [];
     for (const p of res.parts) {
-      for (const k of ['positions', 'normals', 'uvs', 'hairT', 'index', 'skinIndex', 'skinWeight', 'colors']) {
+      for (const k of ['positions', 'normals', 'uvs', 'hairT', 'hairTan', 'blush', 'ao', 'index', 'skinIndex', 'skinWeight', 'colors']) {
         if (p[k]) {
           // copy so cached arrays stay intact in the worker
           p[k] = p[k].slice();

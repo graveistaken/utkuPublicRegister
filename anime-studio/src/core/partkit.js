@@ -35,6 +35,9 @@ export function compact(mesh) {
   out.normals = take(mesh.normals, 3);
   if (mesh.uvs) out.uvs = take(mesh.uvs, 2);
   if (mesh.hairT) out.hairT = take(mesh.hairT, 1);
+  if (mesh.hairTan) out.hairTan = take(mesh.hairTan, 3);
+  if (mesh.blush) out.blush = take(mesh.blush, 1);
+  if (mesh.ao) out.ao = take(mesh.ao, 1);
   if (mesh.colors) out.colors = take(mesh.colors, 3);
   if (mesh.skinIndex) out.skinIndex = take(mesh.skinIndex, 4);
   if (mesh.skinWeight) out.skinWeight = take(mesh.skinWeight, 4);
@@ -124,10 +127,13 @@ export function mergeMeshes(list) {
     normals: new Float32Array(nv * 3),
     index: new Uint32Array(ni),
   };
-  const hasUV = list.some((m) => m.uvs), hasT = list.some((m) => m.hairT), hasC = list.some((m) => m.colors);
+  const hasUV = list.some((m) => m.uvs), hasT = list.some((m) => m.hairT), hasC = list.some((m) => m.colors), hasTan = list.some((m) => m.hairTan);
   if (hasUV) out.uvs = new Float32Array(nv * 2);
   if (hasT) out.hairT = new Float32Array(nv);
   if (hasC) out.colors = new Float32Array(nv * 3).fill(1);
+  if (hasTan) out.hairTan = new Float32Array(nv * 3);
+  const hasAO = list.some((m) => m.ao);
+  if (hasAO) out.ao = new Float32Array(nv).fill(1);
   const hasSkin = list.every((m) => m.skinIndex);
   if (hasSkin) {
     out.skinIndex = new Uint16Array(nv * 4);
@@ -141,6 +147,8 @@ export function mergeMeshes(list) {
     if (hasUV && m.uvs) out.uvs.set(m.uvs, vo * 2);
     if (hasT && m.hairT) out.hairT.set(m.hairT, vo);
     if (hasC && m.colors) out.colors.set(m.colors, vo * 3);
+    if (hasTan && m.hairTan) out.hairTan.set(m.hairTan, vo * 3);
+    if (hasAO && m.ao) out.ao.set(m.ao, vo);
     if (hasSkin) {
       out.skinIndex.set(m.skinIndex, vo * 4);
       out.skinWeight.set(m.skinWeight, vo * 4);
@@ -150,4 +158,25 @@ export function mergeMeshes(list) {
     io += m.index.length;
   }
   return out;
+}
+
+// Ambient occlusion baked from the distance field: sample along the normal and
+// measure how much closer the surface is than the free distance (classic SDF AO).
+export function bakeAO(mesh, field, step = 0.01, strength = 1) {
+  const P = mesh.positions, N = mesh.normals, nv = P.length / 3;
+  const ao = new Float32Array(nv);
+  for (let v = 0; v < nv; v++) {
+    const x = P[v * 3], y = P[v * 3 + 1], z = P[v * 3 + 2];
+    const nx = N[v * 3], ny = N[v * 3 + 1], nz = N[v * 3 + 2];
+    let occ = 0, w = 1;
+    for (let i = 1; i <= 5; i++) {
+      const h = step * i;
+      const d = field.eval(x + nx * h, y + ny * h, z + nz * h);
+      occ += w * Math.max(0, h - d);
+      w *= 0.6;
+    }
+    ao[v] = Math.max(0, Math.min(1, 1 - (occ / step) * 0.55 * strength));
+  }
+  mesh.ao = ao;
+  return mesh;
 }
