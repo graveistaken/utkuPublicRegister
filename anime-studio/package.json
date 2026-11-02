@@ -1,0 +1,20 @@
+{
+  "name": "anime-studio",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Tarayıcı tabanlı 3D anime karakter oluşturucu (GLB / VRM dışa aktarım)",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "meshoptimizer": "^0.22.0",
+    "three": "^0.170.0"
+  },
+  "devDependencies": {
+    "@pixiv/three-vrm": "^3.5.5",
+    "vite": "^6.0.0"
+  }
+}

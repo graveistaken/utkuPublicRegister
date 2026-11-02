@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="tr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AnimeForge Stüdyo</title>
+    <meta name="description" content="Tarayıcıda 3D anime karakter oluştur; GLB ve VRM olarak oyunlarına aktar." />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand"><span class="logo">✦</span> AnimeForge <span class="sub">Stüdyo</span></div>
+      <div class="tools">
+        <button id="undo" class="icon-btn" title="Geri al (Ctrl+Z)">↶</button>
+        <button id="redo" class="icon-btn" title="Yinele (Ctrl+Y)">↷</button>
+        <button id="rand" class="icon-btn wide" title="Rastgele karakter">🎲 <span>Rastgele</span></button>
+      </div>
+    </header>
+    <main class="layout">
+      <aside id="sidebar" class="sidebar"></aside>
+      <section id="viewport" class="viewport">
+        <div class="cam-bar">
+          <button data-cam="full">Tam boy</button>
+          <button data-cam="upper">Üst gövde</button>
+          <button data-cam="face">Yüz</button>
+        </div>
+        <div id="stats" class="stats">Yükleniyor…</div>
+        <div class="busy"><span class="spinner"></span> Model oluşturuluyor</div>
+        <div class="loader"><div class="logo-big">✦</div><div>AnimeForge hazırlanıyor…</div></div>
+      </section>
+    </main>
+    <div id="toast" class="toast"></div>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
