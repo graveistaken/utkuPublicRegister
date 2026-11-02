@@ -7,6 +7,7 @@ import { shared } from './render/materials.js';
 import { UI } from './ui.js';
 import { randomParams } from './random.js';
 import { exportGLB, exportVRM } from './export.js';
+import { saveFile } from './save.js';
 
 const SCHEMA_BY_KEY = Object.fromEntries(SCHEMA.map((s) => [s.key, s]));
 const FACE_DEPS = new Set(['skin', 'skinShade', 'hairColor']);
@@ -325,26 +326,24 @@ class App {
     const author = (document.getElementById('charAuthor')?.value || '').trim() || 'AnimeForge';
     const fname = name.replace(/[^\w\-ğüşıöçĞÜŞİÖÇ]+/g, '_');
     try {
+      let msg = null;
       if (kind === 'glb') {
         this.toast('GLB hazırlanıyor…');
         const buf = await exportGLB(this.view, this.params, { name });
-        download(new Blob([buf], { type: 'model/gltf-binary' }), fname + '.glb');
+        msg = await saveFile(new Blob([buf], { type: 'model/gltf-binary' }), fname + '.glb');
       } else if (kind === 'vrm') {
         this.toast('VRM hazırlanıyor…');
         const buf = await exportVRM(this.view, this.params, { name, author });
-        download(new Blob([buf], { type: 'application/octet-stream' }), fname + '.vrm');
+        msg = await saveFile(new Blob([buf], { type: 'application/octet-stream' }), fname + '.vrm');
       } else if (kind === 'png') {
         const ground = this.ground.visible;
         this.ground.visible = false;
         this.renderer.render(this.scene, this.camera);
-        const url = this.renderer.domElement.toDataURL('image/png');
+        const blob = await new Promise((r) => this.renderer.domElement.toBlob(r, 'image/png'));
         this.ground.visible = ground;
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = fname + '.png';
-        a.click();
+        msg = await saveFile(blob, fname + '.png');
       } else if (kind === 'json') {
-        download(new Blob([JSON.stringify({ app: 'AnimeForge', version: 1, name, params: this.params }, null, 2)], { type: 'application/json' }), fname + '.json');
+        msg = await saveFile(new Blob([JSON.stringify({ app: 'AnimeForge', version: 1, name, params: this.params }, null, 2)], { type: 'application/json' }), fname + '.json');
       } else if (kind === 'load') {
         const inp = document.createElement('input');
         inp.type = 'file';
@@ -360,26 +359,18 @@ class App {
             this.commit();
             this.toast('Karakter yüklendi');
           } catch (e) {
-            this.toast('Dosya okunamadı');
+            this.toast('Dosya okunamadı: geçerli bir AnimeForge .json dosyası seç');
           }
         };
         inp.click();
         return;
       }
-      if (kind !== 'load') this.toast('İndirme başladı ✔');
+      if (msg) this.toast(msg);
     } catch (e) {
       console.error(e);
       this.toast('Dışa aktarma hatası: ' + e.message);
     }
   }
-}
-
-function download(blob, name) {
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = name;
-  a.click();
-  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
 }
 
 window.app = new App();
